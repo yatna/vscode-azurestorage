@@ -9,9 +9,13 @@ import { StorageAccount, StorageAccountKey } from '../../../node_modules/azure-a
 import * as azureStorage from "azure-storage";
 import * as path from 'path';
 import { BlobNode } from './blobNode';
-
 import { IAzureParentTreeItem, IAzureTreeItem, IAzureNode, UserCancelledError } from 'vscode-azureextensionui';
 import { Uri } from 'vscode';
+import { azureStorageOutputChannel } from '../azureStorageOutputChannel';
+import { awaitWithProgress } from '../../components/progress';
+
+const channel = azureStorageOutputChannel;
+let lastUploadFolder: Uri;
 
 export class BlobContainerNode implements IAzureParentTreeItem {
     private _continuationToken: azureStorage.common.ContinuationToken;
@@ -141,5 +145,54 @@ export class BlobContainerNode implements IAzureParentTreeItem {
         }
 
         return undefined;
+    }
+
+    public async uploadBlockBlob(_node: IAzureNode<BlobContainerNode>): Promise<void> {
+        let uris = await vscode.window.showOpenDialog(
+            <vscode.OpenDialogOptions>{
+                canSelectFiles: true,
+                canSelectFolders: false,
+                canSelectMany: false,
+                defaultUri: lastUploadFolder,
+                openLabel: "Select file to upload"
+            }
+        );
+        if (uris && uris[0]) {
+            let uri = uris[0];
+            lastUploadFolder = uri;
+            let filePath = uri.fsPath;
+
+            let blob = await vscode.window.showInputBox({
+                placeHolder: 'Enter a name for the new block blob',
+                value: path.basename(filePath)
+            });
+            if (blob) {
+                let blobFullDisplayPath = `${this.storageAccount.name}/${this.container.name}/${blob}`;
+
+                channel.show();
+                channel.appendLine(`Uploading ${filePath} as ${blobFullDisplayPath}`);
+                const blobService = azureStorage.createBlobService(this.storageAccount.name, this.key.value);
+
+                let speedSummary;
+                const promise = new Promise((resolve, reject) => {
+                    speedSummary = blobService.createBlockBlobFromLocalFile(this.container.name, blob, filePath, function (err: any): void {
+                        err ? reject(err) : resolve();
+                    });
+                });
+
+                await awaitWithProgress(
+                    `Uploading ${blob}`,
+                    channel,
+                    promise, () => {
+                        const completed = <string>speedSummary.getCompleteSize(true);
+                        const total = <string>speedSummary.getTotalSize(true);
+                        const percent = speedSummary.getCompletePercent(0);
+                        const msg = `${blob}: ${completed}/${total} (${percent}%)`;
+                        return msg;
+                    });
+
+                channel.appendLine(`Successfully uploaded ${blobFullDisplayPath}.`);
+            }
+        }
     }
 }

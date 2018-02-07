@@ -35,13 +35,11 @@ export class RemoteFileEditor<ContextT> implements vscode.Disposable {
     async showEditor(context: ContextT): Promise<void> {
         let fileName = await this.remoteFileHandler.getFilename(context);
 
-        this.appendLineToOutput(`Opening '${fileName}' ...`);
         try {
             let parsedPath: path.ParsedPath = path.posix.parse(fileName);
             let temporaryFilePath = await TemporaryFile.create(parsedPath.base);
             await this.remoteFileHandler.downloadFile(context, temporaryFilePath);
             await this.showEditorFromFile(context, temporaryFilePath);
-            this.appendLineToOutput(`Successfully opened '${fileName}'`);
         } catch (error) {
             let details: string;
 
@@ -86,9 +84,16 @@ export class RemoteFileEditor<ContextT> implements vscode.Disposable {
     }
 
     private async showEditorFromFile(context: ContextT, localFilePath: string): Promise<void> {
+        this.appendLineToOutput("Opening...");
         const document = await vscode.workspace.openTextDocument(localFilePath);
-        this.fileMap[localFilePath] = [document, context];
-        await vscode.window.showTextDocument(document);
+        if (document) {
+            this.fileMap[localFilePath] = [document, context];
+            await vscode.window.showTextDocument(document);
+            this.appendLineToOutput(`Successfully opened '${localFilePath}'`);
+        } else {
+            // vscode sometimes returns undefined
+            throw new Error(`Could not open ${localFilePath}.`);
+        }
     }
 
     protected appendLineToOutput(value: string): void {
