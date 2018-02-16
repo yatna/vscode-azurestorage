@@ -13,6 +13,7 @@ import { IAzureParentTreeItem, IAzureTreeItem, IAzureNode, UserCancelledError } 
 import { Uri } from 'vscode';
 import { azureStorageOutputChannel } from '../azureStorageOutputChannel';
 import { awaitWithProgress } from '../../components/progress';
+import { BlobFileHandler } from './blobFileHandler';
 
 const channel = azureStorageOutputChannel;
 let lastUploadFolder: Uri;
@@ -147,7 +148,7 @@ export class BlobContainerNode implements IAzureParentTreeItem {
         return undefined;
     }
 
-    public async uploadBlockBlob(_node: IAzureNode<BlobContainerNode>): Promise<void> {
+    public async uploadBlockBlob(node: IAzureNode<BlobContainerNode>): Promise<void> {
         let uris = await vscode.window.showOpenDialog(
             <vscode.OpenDialogOptions>{
                 canSelectFiles: true,
@@ -161,6 +162,9 @@ export class BlobContainerNode implements IAzureParentTreeItem {
             let uri = uris[0];
             lastUploadFolder = uri;
             let filePath = uri.fsPath;
+
+            let handler = new BlobFileHandler();
+            await handler.checkCanUpload(node, filePath);
 
             let blob = await vscode.window.showInputBox({
                 placeHolder: 'Enter a name for the new block blob',

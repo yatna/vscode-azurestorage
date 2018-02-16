@@ -13,7 +13,7 @@ export namespace Limits {
     export const maxUploadDownloadSizeMB = 4;
     export const maxUploadDownloadSizeBytes = maxUploadDownloadSizeMB * 1000 * 1000;
 
-    export async function requiresStorageExplorer(errorMessage: string, resourceId: string, subscriptionId: string, resourceType: ResourceType, resourceName: string): Promise<void> {
+    export async function askOpenInStorageExplorer(errorMessage: string, resourceId: string, subscriptionId: string, resourceType: ResourceType, resourceName: string): Promise<void> {
         const message = 'Open container in Storage Explorer';
         if (message === await window.showErrorMessage(errorMessage, message)) {
             await storageExplorerLauncher.openResource(resourceId, subscriptionId, resourceType, resourceName);
