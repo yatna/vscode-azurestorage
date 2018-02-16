@@ -91,7 +91,7 @@ export class RemoteFileEditor<ContextT> implements vscode.Disposable {
             await vscode.window.showTextDocument(document);
             this.appendLineToOutput(`Successfully opened '${localFilePath}'`);
         } else {
-            // vscode sometimes returns undefined
+            // https://github.com/Microsoft/vscode/issues/43861
             throw new Error(`Could not open ${localFilePath}.`);
         }
     }
