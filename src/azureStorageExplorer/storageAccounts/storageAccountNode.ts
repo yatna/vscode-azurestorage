@@ -10,45 +10,57 @@ import * as azureStorage from "azure-storage";
 import opn = require('opn');
 import * as path from 'path';
 import { commands, MessageItem, Uri, window } from 'vscode';
-import { IAzureNode, IAzureParentNode, IAzureParentTreeItem, IAzureTreeItem, UserCancelledError } from 'vscode-azureextensionui';
+import { IActionContext, IAzureNode, IAzureParentNode, IAzureParentTreeItem, IAzureTreeItem, UserCancelledError } from 'vscode-azureextensionui';
 import { StorageAccount, StorageAccountKey } from '../../../node_modules/azure-arm-storage/lib/models';
-import * as ext from "../../constants";
+import * as constants from "../../constants";
+import { ext } from '../../extensionVariables';
 import { BlobContainerGroupNode } from '../blobContainers/blobContainerGroupNode';
 import { BlobContainerNode } from "../blobContainers/blobContainerNode";
 import { FileShareGroupNode } from '../fileShares/fileShareGroupNode';
 import { QueueGroupNode } from '../queues/queueGroupNode';
 import { TableGroupNode } from '../tables/tableGroupNode';
-
-export type WebsiteHostingStatus = {
-    capable: boolean;
-    enabled: boolean;
-    indexDocument: string;
-    errorDocument404Path: string;
-};
+import { WebsiteHostingStatus } from '../websiteHostingStatus';
 
 type StorageTypes = 'Storage' | 'StorageV2' | 'BlobStorage';
+
+const defaultIconPath: { light: string | Uri; dark: string | Uri } = {
+    light: path.join(__filename, '..', '..', '..', '..', '..', 'resources', 'light', 'AzureStorageAccount_16x.png'),
+    dark: path.join(__filename, '..', '..', '..', '..', '..', 'resources', 'dark', 'AzureStorageAccount_16x.png')
+};
+
+const websiteIconPath: { light: string | Uri; dark: string | Uri } = {
+    light: path.join(__filename, '..', '..', '..', '..', '..', 'resources', 'light', 'Website.svg'),
+    dark: path.join(__filename, '..', '..', '..', '..', '..', 'resources', 'dark', 'Website.svg')
+};
 
 export class StorageAccountNode implements IAzureParentTreeItem {
     constructor(
         public readonly storageAccount: StorageAccount,
-        public readonly storageManagementClient: StorageManagementClient) {
+        public readonly storageManagementClient: StorageManagementClient
+    ) {
     }
 
     public id: string = this.storageAccount.id;
     public label: string = this.storageAccount.name;
     public static contextValue: string = 'azureStorageAccount';
     public contextValue: string = StorageAccountNode.contextValue;
-    public iconPath: { light: string | Uri; dark: string | Uri } = {
-        light: path.join(__filename, '..', '..', '..', '..', '..', 'resources', 'light', 'AzureStorageAccount_16x.png'),
-        dark: path.join(__filename, '..', '..', '..', '..', '..', 'resources', 'dark', 'AzureStorageAccount_16x.png')
-    };
+    public iconPath: { light: string | Uri; dark: string | Uri } = defaultIconPath;
 
     private _blobContainerGroupNodePromise: Promise<BlobContainerGroupNode>;
+    private _websiteHostingEnabled: boolean;
+
+    // Call this before giving this node to vscode
+    public set websiteHostingEnabled(value: boolean) {
+        this._websiteHostingEnabled = value;
+        this.iconPath = value ? websiteIconPath : defaultIconPath;
+    }
 
     private async getBlobContainerGroupNode(): Promise<BlobContainerGroupNode> {
+        assert(this.iconPath && typeof this._websiteHostingEnabled === 'boolean', "Haven't called storageAccountWebsiteHostingEnabled");
+
         const createBlobContainerGroupNode = async (): Promise<BlobContainerGroupNode> => {
             let primaryKey = await this.getPrimaryKey();
-            return new BlobContainerGroupNode(this.storageAccount, primaryKey);
+            return new BlobContainerGroupNode(this.storageAccount, primaryKey, this._websiteHostingEnabled);
         };
 
         if (!this._blobContainerGroupNodePromise) {
@@ -144,7 +156,7 @@ export class StorageAccountNode implements IAzureParentTreeItem {
         let groupTreeItem = <IAzureTreeItem>await this.getBlobContainerGroupNode();
 
         // Currently only the child with the name "$web" is supported for hosting websites
-        let id = `${this.id}/${groupTreeItem.id || groupTreeItem.label}/${ext.staticWebsiteContainerName}`;
+        let id = `${this.id}/${groupTreeItem.id || groupTreeItem.label}/${constants.staticWebsiteContainerName}`;
         let containerNode = <IAzureParentNode<BlobContainerNode>>await node.treeDataProvider.findNode(id);
         return containerNode;
     }
@@ -159,6 +171,31 @@ export class StorageAccountNode implements IAzureParentTreeItem {
         let primaryKey = await this.getPrimaryKey();
         let blobService = azureStorage.createBlobService(this.storageAccount.name, primaryKey.value);
         return blobService;
+    }
+
+    public async setWebsiteHostingProperties(staticWebsiteProperties: azureStorage.common.models.ServicePropertiesResult.StaticWebsiteProperties): Promise<WebsiteHostingStatus> {
+        let blobService = await this.createBlobService();
+
+        return await new Promise<WebsiteHostingStatus>((resolve, reject) => {
+            blobService.getServiceProperties((err, props: azureStorage.common.models.ServicePropertiesResult.BlobServiceProperties) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    props.StaticWebsite = {
+                        Enabled: staticWebsiteProperties.Enabled,
+                        IndexDocument: staticWebsiteProperties.IndexDocument || undefined,
+                        ErrorDocument404Path: staticWebsiteProperties.ErrorDocument404Path || undefined
+                    };
+                    blobService.setServiceProperties(props, (err2, _response) => {
+                        if (err2) {
+                            reject(err2);
+                        } else {
+                            resolve();
+                        }
+                    });
+                }
+            });
+        });
     }
 
     public async getWebsiteHostingStatus(): Promise<WebsiteHostingStatus> {
@@ -195,15 +232,50 @@ export class StorageAccountNode implements IAzureParentTreeItem {
     }
 
     public async configureStaticWebsite(node: IAzureNode): Promise<void> {
+        const defaultIndexDocumentName = 'index.html';
         assert(node.treeItem === this);
-        let hostingStatus = await this.getWebsiteHostingStatus();
-        await this.ensureHostingCapable(hostingStatus);
+        let oldStatus = await this.getWebsiteHostingStatus();
+        await this.ensureHostingCapable(oldStatus);
 
-        let resourceId = `${node.id}/staticWebsite`;
-        node.openInPortal(resourceId);
+        let indexDocument = await ext.ui.showInputBox({
+            ignoreFocusOut: true,
+            prompt: "Enter the index document name",
+            value: oldStatus.indexDocument || defaultIndexDocumentName
+        });
+
+        let errorDocument404Path: string = await ext.ui.showInputBox({
+            ignoreFocusOut: true,
+            prompt: "Enter the 404 document path",
+            value: oldStatus.errorDocument404Path || "",
+            placeHolder: 'e.g. error/documents/error.html',
+            validateInput: (value: string): string | undefined => {
+                if (value) {
+                    if (value.startsWith('/') || value.endsWith('/')) {
+                        return "If specified, the error document path must not begin or end with a '/' character.";
+                    } else if (value.length < 3 || value.length > 255) {
+                        return "If specified, the error document path must be between 3 and 255 characters in length";
+                    }
+                }
+                return undefined;
+            }
+        });
+
+        let newStatus: azureStorage.common.models.ServicePropertiesResult.StaticWebsiteProperties = {
+            Enabled: true,
+            ErrorDocument404Path: errorDocument404Path,
+            IndexDocument: indexDocument
+        };
+        await this.setWebsiteHostingProperties(newStatus);
+        let msg = oldStatus.enabled ?
+            'Static website hosting configuration updated' :
+            'The storage account has been enabled for static website hosting';
+        window.showInformationMessage(msg);
+        if (!oldStatus.enabled) {
+            await ext.tree.refresh();
+        }
     }
 
-    public async browseStaticWebsite(node: IAzureNode): Promise<void> {
+    public async browseStaticWebsite(node: IAzureNode, actionContext: IActionContext): Promise<void> {
         assert(node.treeItem === this);
         const configure: MessageItem = {
             title: "Configure website hosting"
@@ -218,6 +290,7 @@ export class StorageAccountNode implements IAzureParentTreeItem {
             if (result === configure) {
                 await commands.executeCommand('azureStorage.configureStaticWebsite', node);
             }
+            actionContext.properties.cancelStep = 'WebsiteHostingNotEnabled';
             throw new UserCancelledError(msg);
         }
 
@@ -225,9 +298,11 @@ export class StorageAccountNode implements IAzureParentTreeItem {
             let msg = "No index document has been set for this website.";
             let result = await window.showErrorMessage(msg, configure);
             if (result === configure) {
-                await commands.executeCommand('azureStorage.configureStaticWebsite', node);
+                commands.executeCommand('azureStorage.configureStaticWebsite', node);
+            } else {
+                actionContext.properties.cancelStep = 'NoIndexDocumentHasBeenSet';
+                throw new UserCancelledError(msg);
             }
-            throw new UserCancelledError(msg);
         }
 
         let endpoint = this.getPrimaryWebEndpoint();

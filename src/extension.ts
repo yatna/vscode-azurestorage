@@ -83,6 +83,6 @@ export function activate(context: vscode.ExtensionContext): void {
                 mustBeWebsiteCapable: true,
                 askToConfigureWebsite: true
             });
-        await accountNode.treeItem.browseStaticWebsite(accountNode);
+        await accountNode.treeItem.browseStaticWebsite(accountNode, this);
     });
 }

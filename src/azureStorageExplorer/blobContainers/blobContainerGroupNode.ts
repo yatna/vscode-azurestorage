@@ -16,7 +16,9 @@ export class BlobContainerGroupNode implements IAzureParentTreeItem {
 
     constructor(
         public readonly storageAccount: StorageAccount,
-        public readonly key: StorageAccountKey) {
+        public readonly key: StorageAccountKey,
+        private _storageAccountWebsiteHostingEnabled: boolean
+    ) {
     }
 
     public label: string = "Blob Containers";
@@ -36,7 +38,7 @@ export class BlobContainerGroupNode implements IAzureParentTreeItem {
         this._continuationToken = continuationToken;
 
         return entries.map((container: azureStorage.BlobService.ContainerResult) => {
-            return new BlobContainerNode(container, this.storageAccount, this.key);
+            return new BlobContainerNode(container, this.storageAccount, this.key, this._storageAccountWebsiteHostingEnabled);
         });
     }
 
@@ -69,7 +71,7 @@ export class BlobContainerGroupNode implements IAzureParentTreeItem {
                 showCreatingNode(containerName);
                 progress.report({ message: `Azure Storage: Creating blob container '${containerName}'` });
                 const container = await this.createBlobContainer(containerName);
-                return new BlobContainerNode(container, this.storageAccount, this.key);
+                return new BlobContainerNode(container, this.storageAccount, this.key, this._storageAccountWebsiteHostingEnabled);
             });
         }
 

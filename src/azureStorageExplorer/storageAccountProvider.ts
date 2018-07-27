@@ -16,11 +16,14 @@ export class StorageAccountProvider implements IChildProvider {
         let storageManagementClient = new StorageManagementClient(node.credentials, node.subscriptionId);
 
         let accounts = await storageManagementClient.storageAccounts.list();
-        let accountNodes = accounts.map((storageAccount: StorageAccount) => {
-            return new StorageAccountNode(storageAccount, storageManagementClient);
+        let accountNodePromises = accounts.map(async (storageAccount: StorageAccount): Promise<StorageAccountNode> => {
+            let accountNode = new StorageAccountNode(storageAccount, storageManagementClient);
+            let hostingStatus = await accountNode.getWebsiteHostingStatus();
+            accountNode.websiteHostingEnabled = hostingStatus.enabled;
+            return accountNode;
         });
 
-        return accountNodes;
+        return await Promise.all(accountNodePromises);
     }
 
     hasMoreChildren(): boolean {

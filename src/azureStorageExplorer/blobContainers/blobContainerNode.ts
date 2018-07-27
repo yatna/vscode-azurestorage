@@ -13,6 +13,7 @@ import * as vscode from 'vscode';
 import { DialogResponses, IActionContext, IAzureNode, IAzureParentNode, IAzureParentTreeItem, IAzureTreeItem, parseError, TelemetryProperties, UserCancelledError } from 'vscode-azureextensionui';
 import { StorageAccount, StorageAccountKey } from '../../../node_modules/azure-arm-storage/lib/models';
 import { awaitWithProgress } from '../../components/progress';
+import * as constants from '../../constants';
 import { ext } from "../../extensionVariables";
 import { ICopyUrl } from '../../ICopyUrl';
 import { StorageAccountNode } from "../storageAccounts/storageAccountNode";
@@ -32,23 +33,35 @@ interface ICreateChildOptions {
     blobPath: string;
 }
 
+const defaultIconPath: { light: string | Uri; dark: string | Uri } = {
+    light: path.join(__filename, '..', '..', '..', '..', '..', 'resources', 'light', 'AzureBlob_16x.png'),
+    dark: path.join(__filename, '..', '..', '..', '..', '..', 'resources', 'dark', 'AzureBlob_16x.png')
+};
+
+const websiteIconPath: { light: string | Uri; dark: string | Uri } = {
+    light: path.join(__filename, '..', '..', '..', '..', '..', 'resources', 'light', 'Website.svg'),
+    dark: path.join(__filename, '..', '..', '..', '..', '..', 'resources', 'dark', 'Website.svg')
+};
+
 export class BlobContainerNode implements IAzureParentTreeItem, ICopyUrl {
     private _continuationToken: azureStorage.common.ContinuationToken;
+    public iconPath: { light: string | Uri; dark: string | Uri };
 
     constructor(
         public readonly container: azureStorage.BlobService.ContainerResult,
         public readonly storageAccount: StorageAccount,
-        public readonly key: StorageAccountKey) {
+        public readonly key: StorageAccountKey,
+        storageAccountWebsiteHostingEnabled: boolean
+    ) {
+        this.iconPath =
+            storageAccountWebsiteHostingEnabled && container.name === constants.staticWebsiteContainerName ?
+                websiteIconPath :
+                defaultIconPath;
     }
 
     public label: string = this.container.name;
     public static contextValue: string = 'azureBlobContainer';
     public contextValue: string = BlobContainerNode.contextValue;
-    public iconPath: { light: string | Uri; dark: string | Uri } = {
-        light: path.join(__filename, '..', '..', '..', '..', '..', 'resources', 'light', 'AzureBlob_16x.png'),
-        dark: path.join(__filename, '..', '..', '..', '..', '..', 'resources', 'dark', 'AzureBlob_16x.png')
-    };
-
     public hasMoreChildren(): boolean {
         return !!this._continuationToken;
     }
