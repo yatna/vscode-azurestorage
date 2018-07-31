@@ -65,24 +65,12 @@ export function activate(context: vscode.ExtensionContext): void {
     registerCommand("azureStorage.openInPortal", (node: IAzureNode<IAzureTreeItem>) => {
         node.openInPortal();
     });
-    registerCommand("azureStorage.configureStaticWebsite", async function (this: IActionContext, node: IAzureNode<IAzureTreeItem>): Promise<void> {
-        let accountNode = await selectStorageAccountNodeForCommand(
-            node,
-            this,
-            {
-                mustBeWebsiteCapable: true,
-                askToConfigureWebsite: false
-            });
-        await accountNode.treeItem.configureStaticWebsite(accountNode);
+    registerCommand("azureStorage.configureStaticWebsite", async (node: IAzureNode<IAzureTreeItem>): Promise<void> => {
+        let accountNode = await selectStorageAccountNodeForCommand(node);
+        await accountNode.treeItem.enableAndConfigureStaticWebsite(accountNode);
     });
     registerCommand('azureStorage.browseStaticWebsite', async function (this: IActionContext, node: IAzureNode<IAzureTreeItem>): Promise<void> {
-        let accountNode = await selectStorageAccountNodeForCommand(
-            node,
-            this,
-            {
-                mustBeWebsiteCapable: true,
-                askToConfigureWebsite: true
-            });
+        let accountNode = await selectStorageAccountNodeForCommand(node);
         await accountNode.treeItem.browseStaticWebsite(accountNode, this);
     });
 }

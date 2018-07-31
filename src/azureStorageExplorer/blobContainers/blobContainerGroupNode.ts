@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import { Uri } from 'vscode';
 import { IAzureNode, IAzureParentTreeItem, IAzureTreeItem, UserCancelledError } from 'vscode-azureextensionui';
 import { StorageAccount, StorageAccountKey } from '../../../node_modules/azure-arm-storage/lib/models';
+import { WebsiteHostingStatus } from "../websiteHostingStatus";
 import { BlobContainerNode } from './blobContainerNode';
 
 export class BlobContainerGroupNode implements IAzureParentTreeItem {
@@ -17,7 +18,7 @@ export class BlobContainerGroupNode implements IAzureParentTreeItem {
     constructor(
         public readonly storageAccount: StorageAccount,
         public readonly key: StorageAccountKey,
-        private _storageAccountWebsiteHostingEnabled: boolean
+        private _storageAccountWebsiteHostingStatus: WebsiteHostingStatus
     ) {
     }
 
@@ -38,7 +39,7 @@ export class BlobContainerGroupNode implements IAzureParentTreeItem {
         this._continuationToken = continuationToken;
 
         return entries.map((container: azureStorage.BlobService.ContainerResult) => {
-            return new BlobContainerNode(container, this.storageAccount, this.key, this._storageAccountWebsiteHostingEnabled);
+            return new BlobContainerNode(container, this.storageAccount, this.key, this._storageAccountWebsiteHostingStatus);
         });
     }
 
@@ -71,7 +72,7 @@ export class BlobContainerGroupNode implements IAzureParentTreeItem {
                 showCreatingNode(containerName);
                 progress.report({ message: `Azure Storage: Creating blob container '${containerName}'` });
                 const container = await this.createBlobContainer(containerName);
-                return new BlobContainerNode(container, this.storageAccount, this.key, this._storageAccountWebsiteHostingEnabled);
+                return new BlobContainerNode(container, this.storageAccount, this.key, this._storageAccountWebsiteHostingStatus);
             });
         }
 

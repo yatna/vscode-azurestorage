@@ -3,8 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { commands, window } from 'vscode';
-import { DialogResponses, IActionContext, IAzureNode, IAzureParentNode, IAzureTreeItem, UserCancelledError } from "vscode-azureextensionui";
+import { IAzureNode, IAzureParentNode, IAzureTreeItem } from "vscode-azureextensionui";
 import { ext } from "../extensionVariables";
 import { BlobContainerNode } from "./blobContainers/blobContainerNode";
 import { StorageAccountNode } from "./storageAccounts/storageAccountNode";
@@ -17,9 +16,7 @@ import { StorageAccountNode } from "./storageAccounts/storageAccountNode";
  *   4) anything else, then throw an internal error
  */
 export async function selectStorageAccountNodeForCommand(
-    node: IAzureNode<IAzureTreeItem> | undefined,
-    actionContext: IActionContext,
-    options: { mustBeWebsiteCapable: boolean, askToConfigureWebsite: boolean }
+    node: IAzureNode<IAzureTreeItem> | undefined
 ): Promise<IAzureParentNode<StorageAccountNode>> {
     // Node should be one of:
     //   undefined
@@ -39,27 +36,6 @@ export async function selectStorageAccountNodeForCommand(
         accountNode = <IAzureParentNode<StorageAccountNode>>storageOrContainerNode;
     } else {
         throw new Error(`Internal error: Unexpected node type: ${node.treeItem.contextValue}`);
-    }
-
-    if (options.mustBeWebsiteCapable) {
-        let hostingStatus = await accountNode.treeItem.getWebsiteHostingStatus();
-        await accountNode.treeItem.ensureHostingCapable(hostingStatus);
-
-        if (options.askToConfigureWebsite && !hostingStatus.enabled) {
-            let result = await window.showInformationMessage(
-                `Website hosting is not enabled on storage account "${accountNode.treeItem.label}". Would you like to go to the portal to enable it?`,
-                DialogResponses.yes,
-                DialogResponses.no);
-            let enableResponse = (result === DialogResponses.yes);
-            actionContext.properties.enableResponse = String(enableResponse);
-            actionContext.properties.cancelStep = 'StorageAccountWebSiteNotEnabled';
-            if (enableResponse) {
-                await commands.executeCommand("azureStorage.configureStaticWebsite", accountNode);
-            }
-            // Either way can't continue
-            throw new UserCancelledError();
-
-        }
     }
 
     return accountNode;

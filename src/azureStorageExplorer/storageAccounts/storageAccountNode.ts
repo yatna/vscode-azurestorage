@@ -47,20 +47,23 @@ export class StorageAccountNode implements IAzureParentTreeItem {
     public iconPath: { light: string | Uri; dark: string | Uri } = defaultIconPath;
 
     private _blobContainerGroupNodePromise: Promise<BlobContainerGroupNode>;
-    private _websiteHostingEnabled: boolean;
+    private _websiteHostingStatus: WebsiteHostingStatus;
 
     // Call this before giving this node to vscode
-    public set websiteHostingEnabled(value: boolean) {
-        this._websiteHostingEnabled = value;
-        this.iconPath = value ? websiteIconPath : defaultIconPath;
+    public set websiteHostingStatus(value: WebsiteHostingStatus) {
+        this._websiteHostingStatus = value;
+        this.iconPath = value.enabled ? websiteIconPath : defaultIconPath;
+    }
+    public get websiteHostingStatus(): WebsiteHostingStatus {
+        return this._websiteHostingStatus;
     }
 
     private async getBlobContainerGroupNode(): Promise<BlobContainerGroupNode> {
-        assert(this.iconPath && typeof this._websiteHostingEnabled === 'boolean', "Haven't called storageAccountWebsiteHostingEnabled");
+        assert(this.iconPath && typeof !!this.websiteHostingStatus, "Haven't set websiteHostingStatus");
 
         const createBlobContainerGroupNode = async (): Promise<BlobContainerGroupNode> => {
             let primaryKey = await this.getPrimaryKey();
-            return new BlobContainerGroupNode(this.storageAccount, primaryKey, this._websiteHostingEnabled);
+            return new BlobContainerGroupNode(this.storageAccount, primaryKey, this.websiteHostingStatus);
         };
 
         if (!this._blobContainerGroupNodePromise) {
@@ -215,7 +218,6 @@ export class StorageAccountNode implements IAzureParentTreeItem {
                 }
             });
         });
-
     }
 
     private async getAccountType(): Promise<StorageTypes> {
@@ -231,7 +233,7 @@ export class StorageAccountNode implements IAzureParentTreeItem {
         });
     }
 
-    public async configureStaticWebsite(node: IAzureNode): Promise<void> {
+    public async enableAndConfigureStaticWebsite(node: IAzureNode): Promise<void> {
         const defaultIndexDocumentName = 'index.html';
         assert(node.treeItem === this);
         let oldStatus = await this.getWebsiteHostingStatus();
@@ -240,12 +242,18 @@ export class StorageAccountNode implements IAzureParentTreeItem {
         let indexDocument = await ext.ui.showInputBox({
             ignoreFocusOut: true,
             prompt: "Enter the index document name",
-            value: oldStatus.indexDocument || defaultIndexDocumentName
+            value: oldStatus.indexDocument || defaultIndexDocumentName,
+            validateInput: (value: string) => {
+                if (!value) {
+                    return "Index document name should not be left blank";
+                }
+                return undefined;
+            }
         });
 
         let errorDocument404Path: string = await ext.ui.showInputBox({
             ignoreFocusOut: true,
-            prompt: "Enter the 404 document path",
+            prompt: "Enter the path to your 404 document (optional)",
             value: oldStatus.errorDocument404Path || "",
             placeHolder: 'e.g. error/documents/error.html',
             validateInput: (value: string): string | undefined => {
@@ -275,36 +283,15 @@ export class StorageAccountNode implements IAzureParentTreeItem {
         }
     }
 
+    // Note: It's assumed the site has already been enabled and configured (using selectStorageAccountNodeForCommand)
     public async browseStaticWebsite(node: IAzureNode, actionContext: IActionContext): Promise<void> {
         assert(node.treeItem === this);
-        const configure: MessageItem = {
-            title: "Configure website hosting"
-        };
 
         let hostingStatus = await this.getWebsiteHostingStatus();
-        await this.ensureHostingCapable(hostingStatus);
+        hostingStatus = await this.ensureHostingCapable(hostingStatus);
+        hostingStatus = await this.ensureHostingEnabled(hostingStatus, node, actionContext);
 
-        if (!hostingStatus.enabled) {
-            let msg = "Static website hosting is not enabled for this storage account.";
-            let result = await window.showErrorMessage(msg, configure);
-            if (result === configure) {
-                await commands.executeCommand('azureStorage.configureStaticWebsite', node);
-            }
-            actionContext.properties.cancelStep = 'WebsiteHostingNotEnabled';
-            throw new UserCancelledError(msg);
-        }
-
-        if (!hostingStatus.indexDocument) {
-            let msg = "No index document has been set for this website.";
-            let result = await window.showErrorMessage(msg, configure);
-            if (result === configure) {
-                commands.executeCommand('azureStorage.configureStaticWebsite', node);
-            } else {
-                actionContext.properties.cancelStep = 'NoIndexDocumentHasBeenSet';
-                throw new UserCancelledError(msg);
-            }
-        }
-
+        await node.refresh();
         let endpoint = this.getPrimaryWebEndpoint();
         if (endpoint) {
             await opn(endpoint);
@@ -313,7 +300,7 @@ export class StorageAccountNode implements IAzureParentTreeItem {
         }
     }
 
-    public async ensureHostingCapable(hostingStatus: WebsiteHostingStatus): Promise<void> {
+    public async ensureHostingCapable(hostingStatus: WebsiteHostingStatus): Promise<WebsiteHostingStatus> {
         if (!hostingStatus.capable) {
             // Doesn't support static website hosting. Try to narrow it down.
             let accountType: StorageTypes;
@@ -327,6 +314,53 @@ export class StorageAccountNode implements IAzureParentTreeItem {
             }
 
             throw new Error("This storage account does not support static website hosting.");
+        }
+
+        // This is never changed in this function, but return it for consistency with the other similar functions
+        return hostingStatus;
+    }
+
+    public async ensureHostingEnabled(hostingStatus: WebsiteHostingStatus, node: IAzureNode<IAzureTreeItem>, actionContext: IActionContext): Promise<WebsiteHostingStatus> {
+        await this.ensureHostingCapable(hostingStatus);
+
+        if (!hostingStatus.enabled) {
+            let msg = `Static website hosting is not enabled for storage account "${this.storageAccount.name}". Would you like to enable it?`;
+            const enable: MessageItem = {
+                title: "Enable website hosting"
+            };
+            let enableResult = await window.showErrorMessage(msg, enable);
+            if (enableResult === enable) {
+                await commands.executeCommand('azureStorage.configureStaticWebsite', node);
+                let newStatus = await this.getWebsiteHostingStatus();
+                if (!newStatus.enabled) {
+                    throw new Error(`Storage account "${this.storageAccount.name}" should now be enabled for static website hosting, but is not`);
+                }
+                return newStatus;
+            } else {
+                actionContext.properties.cancelStep = 'WebsiteHostingNotEnabled';
+                throw new UserCancelledError(msg);
+            }
+        }
+
+        return hostingStatus;
+    }
+
+    public async ensureIndexDocumentSet(node: IAzureNode<IAzureTreeItem>, hostingStatus: WebsiteHostingStatus, actionContext: IActionContext): Promise<void> {
+        assert(hostingStatus.capable);
+        assert(hostingStatus.enabled);
+
+        if (!hostingStatus.indexDocument) {
+            let msg = "No index document has been set for this website.";
+            const configure: MessageItem = {
+                title: "Configure index document and 404 path"
+            };
+            let result = await window.showErrorMessage(msg, configure);
+            if (result === configure) {
+                commands.executeCommand('azureStorage.configureStaticWebsite', node);
+            } else {
+                actionContext.properties.cancelStep = 'NoIndexDocumentHasBeenSet';
+                throw new UserCancelledError(msg);
+            }
         }
     }
 }

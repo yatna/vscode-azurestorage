@@ -57,15 +57,13 @@ async function deployStaticWebsite(this: IActionContext, target?: vscode.Uri | I
     }
 
     // Ask first for destination account if needed since it might require configuration and don't want to have user
-    // select source location only to have to possibly cancel.
+    // select source location only to have to possibly cancel. asdf
 
-    let destAccountNode: IAzureParentNode<StorageAccountNode> = await selectStorageAccountNodeForCommand(
-        destNode,
-        this, // actionContext
-        {
-            mustBeWebsiteCapable: true,
-            askToConfigureWebsite: true
-        });
+    let destAccountNode: IAzureParentNode<StorageAccountNode> = await selectStorageAccountNodeForCommand(destNode);
+    let destAccountItem = destAccountNode.treeItem;
+    let hostingStatus = await destAccountItem.getWebsiteHostingStatus();
+    hostingStatus = await destAccountItem.ensureHostingCapable(hostingStatus);
+    hostingStatus = await destAccountItem.ensureHostingEnabled(hostingStatus, destAccountNode, this);
 
     //  Ask for source folder if needed
     if (!sourcePath) {

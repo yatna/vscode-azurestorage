@@ -17,6 +17,7 @@ import * as constants from '../../constants';
 import { ext } from "../../extensionVariables";
 import { ICopyUrl } from '../../ICopyUrl';
 import { StorageAccountNode } from "../storageAccounts/storageAccountNode";
+import { WebsiteHostingStatus } from "../websiteHostingStatus";
 import { BlobFileHandler } from './blobFileHandler';
 import { BlobNode } from './blobNode';
 
@@ -51,10 +52,10 @@ export class BlobContainerNode implements IAzureParentTreeItem, ICopyUrl {
         public readonly container: azureStorage.BlobService.ContainerResult,
         public readonly storageAccount: StorageAccount,
         public readonly key: StorageAccountKey,
-        storageAccountWebsiteHostingEnabled: boolean
+        storageAccountWebsiteHostingStatus: WebsiteHostingStatus
     ) {
         this.iconPath =
-            storageAccountWebsiteHostingEnabled && container.name === constants.staticWebsiteContainerName ?
+            storageAccountWebsiteHostingStatus.enabled && container.name === constants.staticWebsiteContainerName ?
                 websiteIconPath :
                 defaultIconPath;
     }
