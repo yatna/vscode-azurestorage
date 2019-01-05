@@ -10,11 +10,12 @@ let loadEndTime: number;
 
 import * as vscode from 'vscode';
 import { commands } from 'vscode';
-import { AzureTreeDataProvider, AzureTreeItem, AzureUserInput, callWithTelemetryAndErrorHandling, createApiProvider, createTelemetryReporter, IActionContext, registerCommand, registerUIExtensionVariables } from 'vscode-azureextensionui';
+import { AzureTreeDataProvider, AzureTreeItem, AzureUserInput, callWithTelemetryAndErrorHandling, createApiProvider, createTelemetryReporter, IActionContext, registerCommand, registerUIExtensionVariables, SubscriptionTreeItem } from 'vscode-azureextensionui';
 import { AzureExtensionApiProvider } from 'vscode-azureextensionui/api';
 import { registerBlobActionHandlers } from './azureStorageExplorer/blobContainers/blobActionHandlers';
 import { registerBlobContainerActionHandlers } from './azureStorageExplorer/blobContainers/blobContainerActionHandlers';
 import { registerBlobContainerGroupActionHandlers } from './azureStorageExplorer/blobContainers/blobContainerGroupActionHandlers';
+import { createChildNode } from './azureStorageExplorer/commonTreeCommands';
 import { registerDirectoryActionHandlers } from './azureStorageExplorer/fileShares/directoryActionHandlers';
 import { registerFileActionHandlers } from './azureStorageExplorer/fileShares/fileActionHandlers';
 import { registerFileShareActionHandlers } from './azureStorageExplorer/fileShares/fileShareActionHandlers';
@@ -93,6 +94,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<AzureE
                 });
             await accountTreeItem.browseStaticWebsite();
         });
+        registerCommand('azureStorage.createAccount', async (treeItem?: SubscriptionTreeItem) => await createChildNode(SubscriptionTreeItem.contextValue, treeItem));
     });
 
     return createApiProvider([]);

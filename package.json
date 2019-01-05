@@ -46,6 +46,7 @@
 		"onCommand:azureStorage.copyConnectionString",
 		"onCommand:azureStorage.createBlobContainer",
 		"onCommand:azureStorage.deleteBlobContainer",
+		"onCommand:azureStorage.createAccount",
 		"onCommand:azureStorage.createBlockTextBlob",
 		"onCommand:azureStorage.uploadBlockBlob",
 		"onCommand:azureStorage.deleteBlob",
@@ -168,6 +169,11 @@
 				"category": "Azure Storage"
 			},
 			{
+				"command": "azureStorage.createAccount",
+				"title": "Create Storage Account...",
+				"category": "Azure Storage"
+			},
+			{
 				"command": "azureStorage.createBlobContainer",
 				"title": "Create Blob Container...",
 				"category": "Azure Storage"
@@ -284,6 +290,11 @@
 					"command": "azureStorage.refresh",
 					"when": "view == azureStorage && viewItem == azureextensionui.azureSubscription",
 					"group": "9_refresh"
+				},
+				{
+					"command": "azureStorage.createAccount",
+					"when": "view == azureStorage && viewItem == azureextensionui.azureSubscription",
+					"group": "2_create"
 				},
 				{
 					"$comment": "========= azureStorageAccount =========",
