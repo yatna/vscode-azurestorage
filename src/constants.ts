@@ -11,6 +11,7 @@ export enum configurationSettingsKeys {
     deployPath = 'deployPath',
     preDeployTask = 'preDeployTask',
     enableViewInFileExplorer = 'enableViewInFileExplorer',
+    deploySubpath = 'deploySubpath'
 }
 
 export const extensionPrefix: string = 'azureStorage';

@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as clipboardy from 'clipboardy';
+import * as path from 'path';
 import * as vscode from "vscode";
 import { IActionContext, registerCommand } from 'vscode-azureextensionui';
 import { isPathEqual, isSubpath } from '../../components/fs';
@@ -91,7 +92,10 @@ async function deployStaticWebsite(context: IActionContext, target?: vscode.Uri 
 
     await runPreDeployTask(sourcePath, context);
 
-    return destContainerTreeItem.deployStaticWebsite(context, sourcePath);
+    const localPath: string = vscode.workspace.getConfiguration(extensionPrefix, vscode.Uri.file(sourcePath)).get(configurationSettingsKeys.deploySubpath, "");
+    const deployPath = path.join(sourcePath, localPath);
+
+    return destContainerTreeItem.deployStaticWebsite(context, deployPath);
 }
 
 async function runPreDeployTask(deployFsPath: string, context: IActionContext): Promise<void> {

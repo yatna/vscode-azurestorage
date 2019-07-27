@@ -680,6 +680,11 @@
 					"type": "string",
 					"description": "The name of the task to run before deploying."
 				},
+				"azureStorage.deploySubpath": {
+					"scope": "resource",
+					"type": "string",
+					"description": "Absolute path to the subdirectory to deploy."
+				},
 				"azureStorage.enableViewInFileExplorer": {
 					"type": "boolean",
 					"description": "Enable preview support for file share files and blob containers in file explorer.",
