@@ -173,8 +173,13 @@ export class StorageAccountTreeItem extends AzureParentTreeItem<IStorageRoot> {
         });
     }
 
-    async getConnectionString(): Promise<string> {
-        return `DefaultEndpointsProtocol=https;AccountName=${this.storageAccount.name};AccountKey=${this.key.value};`;
+    getConnectionString(): string {
+        let endpointSuffix: string = this.root.environment.storageEndpointSuffix;
+
+        if (endpointSuffix.startsWith('.')) {
+            endpointSuffix = endpointSuffix.slice(1);
+        }
+        return `DefaultEndpointsProtocol=https;AccountName=${this.storageAccount.name};AccountKey=${this.key.value};EndpointSuffix=${endpointSuffix};`;
     }
 
     async getKeys(): Promise<StorageAccountKeyWrapper[]> {

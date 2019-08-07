@@ -47,7 +47,7 @@ async function copyConnectionString(context: IActionContext, treeItem?: StorageA
         treeItem = <StorageAccountTreeItem>await ext.tree.showTreeItemPicker(StorageAccountTreeItem.contextValue, context);
     }
 
-    let connectionString = await treeItem.getConnectionString();
+    let connectionString = treeItem.getConnectionString();
     await clipboardy.write(connectionString);
 }
 
