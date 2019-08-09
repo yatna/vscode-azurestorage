@@ -7,6 +7,7 @@ import * as azureStorage from "azure-storage";
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { callWithTelemetryAndErrorHandling, IActionContext, parseError } from "vscode-azureextensionui";
+import { ext } from '../../extensionVariables';
 import { findRoot } from "../findRoot";
 import { getFileSystemError } from "../getFileSystemError";
 import { parseUri } from "../parseUri";
@@ -26,8 +27,35 @@ export class FileShareFS implements vscode.FileSystemProvider {
     private _emitter: vscode.EventEmitter<vscode.FileChangeEvent[]> = new vscode.EventEmitter<vscode.FileChangeEvent[]>();
     readonly onDidChangeFile: vscode.Event<vscode.FileChangeEvent[]> = this._emitter.event;
 
-    watch(_uri: vscode.Uri, _options: { recursive: boolean; excludes: string[]; }): vscode.Disposable {
-        throw new Error("Method not implemented.");
+    // FileSystemWatcher
+    private _watchers: Map<vscode.Uri, vscode.FileSystemWatcher> = new Map<vscode.Uri, vscode.FileSystemWatcher>();
+
+    watch(workspaceUri: vscode.Uri, options: { recursive: boolean; excludes: string[]; }): vscode.Disposable {
+        if (!(vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.find(folder => folder.uri.scheme === workspaceUri.scheme && folder.uri.fsPath === workspaceUri.fsPath && folder.uri.path === workspaceUri.path))) {
+            const message: string = `The URI passed to the watch function, "${workspaceUri.fsPath}",doesn't seem to be any of the workspaces. Hmmm!`;
+            ext.outputChannel.appendLine(message);
+            throw new Error(message);
+        }
+        const workspaceGlob = new vscode.RelativePattern(workspaceUri.fsPath, options.recursive ? "**" : "");
+        if (this._watchers.get(workspaceUri) === undefined) {
+            const currentWatcher: vscode.FileSystemWatcher = vscode.workspace.createFileSystemWatcher(workspaceGlob, false, false, false);
+            currentWatcher.onDidChange(e => {
+                ext.outputChannel.appendLine(`event for ${e.fsPath} - associated URI:${workspaceUri} has some contents changed`);
+                this._emitter.fire([{ type: vscode.FileChangeType.Changed, uri: e }]);
+            });
+            currentWatcher.onDidCreate(e => {
+                ext.outputChannel.appendLine(`event for ${e.fsPath} - associated URI:${workspaceUri} was created`);
+                this._emitter.fire([{ type: vscode.FileChangeType.Created, uri: e }]);
+            });
+            currentWatcher.onDidDelete(e => {
+                ext.outputChannel.appendLine(`event one last time(?) for ${e.fsPath} - associated URI:${workspaceUri} is now deleted`);
+                this._emitter.fire([{ type: vscode.FileChangeType.Deleted, uri: e }]);
+            });
+            this._watchers.set(workspaceUri, currentWatcher);
+        }
+        // tslint:disable-next-line: no-unsafe-any
+        const disposable: vscode.Disposable = { dispose: () => (<vscode.FileSystemWatcher>this._watchers.get(workspaceUri)).dispose() };
+        return disposable;
     }
 
     async stat(uri: vscode.Uri): Promise<vscode.FileStat> {
@@ -198,6 +226,7 @@ export class FileShareFS implements vscode.FileSystemProvider {
 
     async rename(oldUri: vscode.Uri, newUri: vscode.Uri, _options: { overwrite: boolean; }): Promise<void> {
         return await callWithTelemetryAndErrorHandling('fs.rename', async (context) => {
+            this._emitter.fire([{ type: vscode.FileChangeType.Changed, uri: vscode.Uri.parse("test.txt") }]);
             showRenameError(oldUri, newUri, this._fileShareString, context);
         });
     }
