@@ -4,10 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as azureStorage from "azure-storage";
+import * as fse from 'fs-extra';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { callWithTelemetryAndErrorHandling, IActionContext, parseError } from "vscode-azureextensionui";
-import { ext } from '../../extensionVariables';
+import { ext } from "../../extensionVariables";
 import { findRoot } from "../findRoot";
 import { getFileSystemError } from "../getFileSystemError";
 import { parseUri } from "../parseUri";
@@ -31,30 +32,45 @@ export class FileShareFS implements vscode.FileSystemProvider {
     private _watchers: Map<vscode.Uri, vscode.FileSystemWatcher> = new Map<vscode.Uri, vscode.FileSystemWatcher>();
 
     watch(workspaceUri: vscode.Uri, options: { recursive: boolean; excludes: string[]; }): vscode.Disposable {
-        if (!(vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.find(folder => folder.uri.scheme === workspaceUri.scheme && folder.uri.fsPath === workspaceUri.fsPath && folder.uri.path === workspaceUri.path))) {
+        const watcher = fse.watch("**", { recursive: options.recursive }, async (event: string, filename: string | Buffer) => {
+            ext.outputChannel.appendLine(`fse.watch watcher emits event: ${event}`);
+            this._emitter.fire([{
+                // tslint:disable-next-line: prefer-type-cast
+                type: event === 'change' ? vscode.FileChangeType.Changed : event === 'rename' || fse.existsSync(filename) ? vscode.FileChangeType.Created : vscode.FileChangeType.Deleted,
+                uri: workspaceUri.with({ path: filename.toString() })
+            } as vscode.FileChangeEvent]);
+        });
+
+        const workspaceFolder = vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.find(folder => folder.uri.scheme === workspaceUri.scheme && folder.uri.fsPath === workspaceUri.fsPath && folder.uri.path === workspaceUri.path);
+        if (!workspaceFolder) {
             const message: string = `The URI passed to the watch function, "${workspaceUri.fsPath}",doesn't seem to be any of the workspaces. Hmmm!`;
             ext.outputChannel.appendLine(message);
             throw new Error(message);
         }
-        const workspaceGlob = new vscode.RelativePattern(workspaceUri.fsPath, options.recursive ? "**" : "");
+        //const workspaceGlob = new vscode.RelativePattern(workspaceFolder, "**");
         if (this._watchers.get(workspaceUri) === undefined) {
-            const currentWatcher: vscode.FileSystemWatcher = vscode.workspace.createFileSystemWatcher(workspaceGlob, false, false, false);
+            const currentWatcher: vscode.FileSystemWatcher = vscode.workspace.createFileSystemWatcher("**", false, false, false);
             currentWatcher.onDidChange(e => {
-                ext.outputChannel.appendLine(`event for ${e.fsPath} - associated URI:${workspaceUri} has some contents changed`);
+                ext.outputChannel.appendLine(`vscodeFSWatch event for ${e.fsPath} - associated URI:${workspaceUri} has some contents changed`);
                 this._emitter.fire([{ type: vscode.FileChangeType.Changed, uri: e }]);
             });
             currentWatcher.onDidCreate(e => {
-                ext.outputChannel.appendLine(`event for ${e.fsPath} - associated URI:${workspaceUri} was created`);
+                ext.outputChannel.appendLine(`vscodeFSWatch event for ${e.fsPath} - associated URI:${workspaceUri} was created`);
                 this._emitter.fire([{ type: vscode.FileChangeType.Created, uri: e }]);
             });
             currentWatcher.onDidDelete(e => {
-                ext.outputChannel.appendLine(`event one last time(?) for ${e.fsPath} - associated URI:${workspaceUri} is now deleted`);
+                ext.outputChannel.appendLine(`vscodeFSWatch event one last time(?) for ${e.fsPath} - associated URI:${workspaceUri} is now deleted`);
                 this._emitter.fire([{ type: vscode.FileChangeType.Deleted, uri: e }]);
             });
             this._watchers.set(workspaceUri, currentWatcher);
         }
         // tslint:disable-next-line: no-unsafe-any
-        const disposable: vscode.Disposable = { dispose: () => (<vscode.FileSystemWatcher>this._watchers.get(workspaceUri)).dispose() };
+        const disposable: vscode.Disposable = {
+            dispose: () => {
+                (<vscode.FileSystemWatcher>this._watchers.get(workspaceUri)).dispose();
+                watcher.close();
+            }
+        };
         return disposable;
     }
 
