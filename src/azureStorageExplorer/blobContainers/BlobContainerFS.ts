@@ -25,7 +25,7 @@ export class BlobContainerFS implements vscode.FileSystemProvider {
     readonly onDidChangeFile: vscode.Event<vscode.FileChangeEvent[]> = this._emitter.event;
 
     watch(_uri: vscode.Uri, _options: { recursive: boolean; excludes: string[]; }): vscode.Disposable {
-        throw new Error("Method not implemented.");
+        return new vscode.Disposable(() => { return; });
     }
 
     async stat(uri: vscode.Uri): Promise<vscode.FileStat> {
