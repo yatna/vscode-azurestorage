@@ -70,7 +70,8 @@ export async function activateInternal(context: vscode.ExtensionContext, perfSta
         registerTableGroupActionHandlers();
 
         ext.azureStorageFS = new AzureStorageFS();
-        context.subscriptions.push(vscode.workspace.registerFileSystemProvider('azurestorage', ext.azureStorageFS, { isCaseSensitive: true }));
+        context.subscriptions.push(vscode.workspace.registerFileSystemProvider(ext.azureStorageScheme, ext.azureStorageFS, { isCaseSensitive: true }));
+        context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider(ext.azureStorageScheme, ext.azureStorageFS));
 
         registerCommand('azureStorage.openInFileExplorer', async (actionContext: IActionContext, treeItem?: BlobContainerTreeItem | FileShareTreeItem) => {
             if (!treeItem) {

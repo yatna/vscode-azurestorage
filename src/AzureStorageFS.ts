@@ -28,7 +28,7 @@ type AzureStorageBlobTreeItem = BlobTreeItem | BlobDirectoryTreeItem | BlobConta
 type AzureStorageTreeItem = AzureStorageFileTreeItem | AzureStorageBlobTreeItem;
 type AzureStorageDirectoryTreeItem = DirectoryTreeItem | FileShareTreeItem | BlobDirectoryTreeItem | BlobContainerTreeItem;
 
-export class AzureStorageFS implements vscode.FileSystemProvider {
+export class AzureStorageFS implements vscode.FileSystemProvider, vscode.TextDocumentContentProvider {
     private _emitter: vscode.EventEmitter<vscode.FileChangeEvent[]> = new vscode.EventEmitter<vscode.FileChangeEvent[]>();
     private _bufferedEvents: vscode.FileChangeEvent[] = [];
     private _fireSoonHandle?: NodeJS.Timer;
@@ -44,7 +44,13 @@ export class AzureStorageFS implements vscode.FileSystemProvider {
         const rootName = path.basename(rootId);
         filePath = filePath || matches[2];
 
-        return vscode.Uri.parse(`azurestorage:///${path.posix.join(rootName, filePath)}?resourceId=${rootId}`);
+        return vscode.Uri.parse(`${ext.azureStorageScheme}://${path.posix.join(rootName, filePath)}?resourceId=${rootId}`);
+    }
+
+    static async showEditor(treeItem: BlobTreeItem | FileTreeItem): Promise<void> {
+        const uri = this.idToUri(treeItem.fullId);
+        let doc = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(doc, { preview: false });
     }
 
     public static fireDeleteEvent(node: AzExtTreeItem): void {
@@ -59,6 +65,10 @@ export class AzureStorageFS implements vscode.FileSystemProvider {
         return new vscode.Disposable(() => {
             // Since we're not actually watching "in Azure" (i.e. polling for changes), there's no need to selectively watch based on the Uri passed in here. Thus there's nothing to dispose
         });
+    }
+
+    async provideTextDocumentContent(uri: vscode.Uri): Promise<string> {
+        return (await this.readFile(uri)).toString();
     }
 
     async stat(uri: vscode.Uri): Promise<vscode.FileStat> {
@@ -429,7 +439,7 @@ export class AzureStorageFS implements vscode.FileSystemProvider {
                 }
 
                 // Fallback to the cached query because this uri's query doesn't exist
-                return vscode.Uri.parse(`azurestorage://${uri.path}?${cache.query}`);
+                return vscode.Uri.parse(`${ext.azureStorageScheme}://${uri.path}?${cache.query}`);
             }
         } else {
             if (uri.query) {
