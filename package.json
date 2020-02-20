@@ -71,6 +71,7 @@
 		"onCommand:azureStorage.deleteQueue",
 		"onCommand:azureStorage.uploadToAzureStorage",
 		"onCommand:azureStorage.attachStorageAccount",
+		"onCommand:azureStorage.attachWithConnectionString",
 		"onCommand:azureStorage.attachEmulator",
 		"onCommand:azureStorage.detachStorageAccount"
 	],
@@ -309,6 +310,11 @@
 					"light": "resources/light/Connect.svg",
 					"dark": "resources/dark/Connect.svg"
 				}
+			},
+			{
+				"command": "azureStorage.attachWithConnectionString",
+				"title": "Attach with Connection String...",
+				"category": "Azure Storage"
 			},
 			{
 				"command": "azureStorage.attachEmulator",
@@ -640,7 +646,7 @@
 					"group": "7_modification"
 				},
 				{
-					"command": "azureStorage.attachStorageAccount",
+					"command": "azureStorage.attachWithConnectionString",
 					"when": "view == azureStorage && viewItem == attachedStorageAccounts"
 				},
 				{
@@ -711,6 +717,10 @@
 				},
 				{
 					"command": "azureStorage.openQueue",
+					"when": "never"
+				},
+				{
+					"command": "azureStorage.attachStorageAccount",
 					"when": "never"
 				}
 			]

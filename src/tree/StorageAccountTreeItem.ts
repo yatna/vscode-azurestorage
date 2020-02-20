@@ -52,7 +52,6 @@ export class StorageAccountTreeItem extends AzureParentTreeItem<IStorageRoot> {
         parent: AzureParentTreeItem,
         public readonly storageAccount: StorageAccountWrapper,
         public readonly storageManagementClient: StorageManagementClient,
-        public readonly isAttached?: boolean,
         public readonly attachedAccountKey?: StorageAccountKey) {
         super(parent);
         this._root = this.createRoot(parent.root);
@@ -62,8 +61,8 @@ export class StorageAccountTreeItem extends AzureParentTreeItem<IStorageRoot> {
         this._tableGroupTreeItem = new TableGroupTreeItem(this);
     }
 
-    public static async createStorageAccountTreeItem(parent: AzureParentTreeItem, storageAccount: StorageAccountWrapper, client: StorageManagementClient, isAttached?: boolean, attachedAccountKey?: StorageAccountKey): Promise<StorageAccountTreeItem> {
-        const ti = new StorageAccountTreeItem(parent, storageAccount, client, isAttached, attachedAccountKey);
+    public static async createStorageAccountTreeItem(parent: AzureParentTreeItem, storageAccount: StorageAccountWrapper, client: StorageManagementClient, attachedAccountKey?: StorageAccountKey): Promise<StorageAccountTreeItem> {
+        const ti = new StorageAccountTreeItem(parent, storageAccount, client, attachedAccountKey);
         // make sure key is initialized
         await ti.refreshKey();
         return ti;
@@ -161,7 +160,8 @@ export class StorageAccountTreeItem extends AzureParentTreeItem<IStorageRoot> {
     }
 
     async getKeys(): Promise<StorageAccountKeyWrapper[]> {
-        if (this.isAttached) {
+        if (this.attachedAccountKey) {
+            // This is an attached account
             return [new StorageAccountKeyWrapper(nonNullProp(this, 'attachedAccountKey'))];
         } else {
             let parsedId = this.parseAzureResourceId(this.storageAccount.id);

@@ -10,6 +10,8 @@ export interface IParsedConnectionString {
     endpointSuffix: string;
 }
 
+export const connectionStringPlaceholder: string = 'DefaultEndpointsProtocol=...;AccountName=...;AccountKey=...;EndpointSuffix=...';
+
 export function parseConnectionString(connectionString: string): IParsedConnectionString {
     const defaultEndpointsProtocol: string | undefined = getPropertyFromConnectionString(connectionString, 'DefaultEndpointsProtocol');
     const accountName: string | undefined = getPropertyFromConnectionString(connectionString, 'AccountName');
@@ -17,7 +19,7 @@ export function parseConnectionString(connectionString: string): IParsedConnecti
     const endpointSuffix: string | undefined = getPropertyFromConnectionString(connectionString, 'EndpointSuffix');
 
     if (!defaultEndpointsProtocol || !accountName || !accountKey || !endpointSuffix) {
-        throw new Error('Invalid connection string.');
+        throw new Error(`Invalid connection string. Format must match "${connectionStringPlaceholder}"`);
     }
 
     return { defaultEndpointsProtocol, accountName, accountKey, endpointSuffix };

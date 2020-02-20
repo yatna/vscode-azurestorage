@@ -13,24 +13,21 @@ import { Uri } from 'vscode';
 import { AzExtParentTreeItem, AzExtTreeItem, AzureParentTreeItem, GenericTreeItem, ISubscriptionContext } from "vscode-azureextensionui";
 import { getResourcesPath } from '../constants';
 import { ext } from '../extensionVariables';
-import { IParsedConnectionString, parseConnectionString } from '../utils/connectionStringUtils';
+import { connectionStringPlaceholder, IParsedConnectionString, parseConnectionString } from '../utils/connectionStringUtils';
 import { StorageAccountWrapper } from '../utils/storageWrappers';
 import { StorageAccountTreeItem } from './StorageAccountTreeItem';
 
 interface IPersistedAccount {
-    id: string;
     name: string;
-    primaryEndpoints: IPrimaryEndpoints;
     key: StorageAccountKey;
-    // tslint:disable-next-line:no-reserved-keywords
-    type: string;
+    primaryEndpoints: IPrimaryEndpoints;
 }
 
 interface IPrimaryEndpoints {
     blob: string;
     table: string;
     queue: string;
-    file?: string; // Emulated accounts don't support file shares
+    file?: string; // The emulator doesn't support file shares
 }
 
 export const attachedAccountSuffix: string = 'Attached';
@@ -49,21 +46,8 @@ export class AttachedStorageAccountsTreeItem extends AzureParentTreeItem {
     private readonly _emulatorBlobPort: number = 10000;
     private readonly _emulatorTablePort: number = 10002;
     private readonly _emulatorQueuePort: number = 10001;
-    private _emulatorAccountKey: StorageAccountKey = { keyName: 'primaryKey', value: 'Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==' };
-    private readonly _attachAccountString: string = 'Attach Account...';
-    private readonly _attachEmulatorString: string = 'Attach Emulator';
-    private readonly _attachAccountTreeItem: AzExtTreeItem = new GenericTreeItem(this, {
-        contextValue: 'azureStorageAttachAccount',
-        label: this._attachAccountString,
-        commandId: 'azureStorage.attachStorageAccount',
-        includeInTreeItemPicker: true
-    });
-    private readonly _attachEmulatorTreeItem: AzExtTreeItem = new GenericTreeItem(this, {
-        contextValue: 'azureStorageAttachEmulator',
-        label: this._attachEmulatorString,
-        commandId: 'azureStorage.attachEmulator',
-        includeInTreeItemPicker: true
-    });
+    private _emulatorAccountKey: string = 'Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==';
+    private readonly _storageAccountType: string = 'Microsoft.Storage/storageAccounts';
 
     constructor(parent: AzExtParentTreeItem) {
         super(parent);
@@ -83,14 +67,6 @@ export class AttachedStorageAccountsTreeItem extends AzureParentTreeItem {
         };
     }
 
-    public static validateConnectionString(_value: string): string | undefined {
-        // if (value && value.match(/^mongodb(\+srv)?:\/\//)) {
-        //     return undefined;
-        // }
-        // return 'Connection string must start with "???????????"';
-        return undefined;
-    }
-
     public hasMoreChildrenImpl(): boolean {
         return false;
     }
@@ -104,16 +80,15 @@ export class AttachedStorageAccountsTreeItem extends AzureParentTreeItem {
         const attachedAccounts: StorageAccountTreeItem[] = await this.getAttachedAccounts();
 
         if (attachedAccounts.length === 0) {
-            return [this._attachAccountTreeItem, this._attachEmulatorTreeItem];
+            return [new GenericTreeItem(this, {
+                contextValue: 'azureStorageAttachAccount',
+                label: 'Attach Storage Account...',
+                commandId: 'azureStorage.attachStorageAccount',
+                includeInTreeItemPicker: true
+            })];
         }
 
-        for (let acct of attachedAccounts) {
-            if (acct.storageAccount.name === this._emulatorAccountName) {
-                return [...attachedAccounts, this._attachAccountTreeItem];
-            }
-        }
-
-        return [...attachedAccounts, this._attachAccountTreeItem, this._attachEmulatorTreeItem];
+        return attachedAccounts;
     }
 
     public isAncestorOfImpl(contextValue: string): boolean {
@@ -122,55 +97,49 @@ export class AttachedStorageAccountsTreeItem extends AzureParentTreeItem {
         return contextValue !== StorageAccountTreeItem.contextValue;
     }
 
-    public async attachNewAccount(): Promise<void> {
+    public async attachWithConnectionString(): Promise<void> {
         const connectionString = await vscode.window.showInputBox({
-            placeHolder: 'DefaultEndpointsProtocol=...;AccountName=...;AccountKey=...;EndpointSuffix=...',
+            placeHolder: connectionStringPlaceholder,
             prompt: 'Enter the connection string for your storage account',
-            validateInput: AttachedStorageAccountsTreeItem.validateConnectionString,
             ignoreFocusOut: true,
         });
 
         if (connectionString) {
             let parsedConnectionString: IParsedConnectionString = parseConnectionString(connectionString);
-            let getEndpoint = (endpointType: string) => { return `${parsedConnectionString.defaultEndpointsProtocol}://${parsedConnectionString.accountName}.${endpointType}.${parsedConnectionString.endpointSuffix}`; };
             await this.attachAccount(await this.createTreeItem(
-                `/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/attached/providers/Microsoft.Storage/storageAccounts/${parsedConnectionString.accountName}`,
                 parsedConnectionString.accountName,
+                this.getStorageAccountKey(parsedConnectionString.accountKey),
                 {
-                    blob: getEndpoint('blob'),
-                    file: getEndpoint('file'),
-                    queue: getEndpoint('queue'),
-                    table: getEndpoint('table')
-                },
-                { keyName: 'primaryKey', value: parsedConnectionString.accountKey },
-                'Microsoft.Storage/storageAccounts'
+                    blob: this.getAttachedAccountEndpoint(parsedConnectionString, 'blob'),
+                    file: this.getAttachedAccountEndpoint(parsedConnectionString, 'file'),
+                    queue: this.getAttachedAccountEndpoint(parsedConnectionString, 'queue'),
+                    table: this.getAttachedAccountEndpoint(parsedConnectionString, 'table')
+                }
             ));
         }
     }
 
     public async attachEmulator(): Promise<void> {
         await this.attachAccount(await this.createTreeItem(
-            `/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/emulator/providers/Microsoft.Storage/storageAccounts/${this._emulatorAccountName}`,
             this._emulatorAccountName,
+            this.getStorageAccountKey(this._emulatorAccountKey),
             {
                 blob: this.getEmulatorEndpoint(this._emulatorBlobPort),
                 queue: this.getEmulatorEndpoint(this._emulatorQueuePort),
                 table: this.getEmulatorEndpoint(this._emulatorTablePort)
-            },
-            this._emulatorAccountKey,
-            'Microsoft.Storage/storageAccounts'
+            }
         ));
     }
 
-    public async detach(treeItem: AzExtTreeItem): Promise<void> {
+    public async detach(treeItem: StorageAccountTreeItem): Promise<void> {
         let updatedAttachedAccounts: StorageAccountTreeItem[] = [];
 
         const value: string | undefined = ext.context.globalState.get(this._serviceName);
         if (value) {
             const accounts: IPersistedAccount[] = <IPersistedAccount[]>JSON.parse(value);
             await Promise.all(accounts.map(async account => {
-                if (treeItem.id !== account.id) {
-                    updatedAttachedAccounts.push(await this.createTreeItem(account.id, account.name, account.primaryEndpoints, account.key, account.type));
+                if (treeItem.storageAccount.name !== account.name) {
+                    updatedAttachedAccounts.push(await this.createTreeItem(account.name, account.key, account.primaryEndpoints));
                 }
             }));
         }
@@ -209,7 +178,7 @@ export class AttachedStorageAccountsTreeItem extends AzureParentTreeItem {
             // ext.context.globalState.update(this._serviceName, false);
             const accounts: IPersistedAccount[] = <IPersistedAccount[]>JSON.parse(value);
             await Promise.all(accounts.map(async account => {
-                persistedAccounts.push(await this.createTreeItem(account.id, account.name, account.primaryEndpoints, account.key, account.type));
+                persistedAccounts.push(await this.createTreeItem(account.name, account.key, account.primaryEndpoints));
             }));
         }
 
@@ -217,9 +186,14 @@ export class AttachedStorageAccountsTreeItem extends AzureParentTreeItem {
     }
 
     // tslint:disable-next-line:no-reserved-keywords
-    private async createTreeItem(id: string, name: string, primaryEndpoints: IPrimaryEndpoints, key: StorageAccountKey, type: string): Promise<StorageAccountTreeItem> {
-        // let storageManagementClient: StorageManagementClient = createAzureClient(this.root, StorageManagementClient);
-        let treeItem: StorageAccountTreeItem = await StorageAccountTreeItem.createStorageAccountTreeItem(this, new StorageAccountWrapper(<StorageAccount>{ id, name, type, primaryEndpoints }), <StorageManagementClient>{}, true, key);
+    private async createTreeItem(name: string, key: StorageAccountKey, primaryEndpoints: IPrimaryEndpoints): Promise<StorageAccountTreeItem> {
+        let storageAccountWrapper: StorageAccountWrapper = new StorageAccountWrapper(<StorageAccount>{
+            id: this.getAttachedAccountId(name),
+            type: this._storageAccountType,
+            name,
+            primaryEndpoints
+        });
+        let treeItem: StorageAccountTreeItem = await StorageAccountTreeItem.createStorageAccountTreeItem(this, storageAccountWrapper, <StorageManagementClient>{}, key);
         treeItem.contextValue += attachedAccountSuffix;
         return treeItem;
     }
@@ -227,19 +201,21 @@ export class AttachedStorageAccountsTreeItem extends AzureParentTreeItem {
     private async persistIds(attachedAccounts: StorageAccountTreeItem[]): Promise<void> {
         const value: IPersistedAccount[] = attachedAccounts.map((treeItem: StorageAccountTreeItem) => {
             return <IPersistedAccount>{
-                id: treeItem.storageAccount.id,
                 name: treeItem.storageAccount.name,
+                key: treeItem.attachedAccountKey,
                 primaryEndpoints: {
                     blob: treeItem.storageAccount.primaryEndpoints.blob,
                     table: treeItem.storageAccount.primaryEndpoints.table,
                     queue: treeItem.storageAccount.primaryEndpoints.queue,
                     file: treeItem.storageAccount.primaryEndpoints.file
-                },
-                key: treeItem.attachedAccountKey,
-                type: treeItem.storageAccount.type
+                }
             };
         });
         await ext.context.globalState.update(this._serviceName, JSON.stringify(value));
+    }
+
+    private getAttachedAccountEndpoint(parsedConnectionString: IParsedConnectionString, endpointType: string): string {
+        return `${parsedConnectionString.defaultEndpointsProtocol}://${parsedConnectionString.accountName}.${endpointType}.${parsedConnectionString.endpointSuffix}`;
     }
 
     private getEmulatorEndpoint(port: number): string {
@@ -247,9 +223,13 @@ export class AttachedStorageAccountsTreeItem extends AzureParentTreeItem {
         return `http://127.0.0.1:${port}/${this._emulatorAccountName}`;
     }
 
-    // private getAttachedAccountKey(key: string): StorageAccountKey {
-    //     return { keyName: 'primaryKey', value: key };
-    // }
+    private getAttachedAccountId(name: string): string {
+        return `/subscriptions/attached/resourceGroups/attached/providers/Microsoft.Storage/storageAccounts/${name}`;
+    }
+
+    private getStorageAccountKey(key: string): StorageAccountKey {
+        return { keyName: 'primaryKey', value: key };
+    }
 }
 
 class AttachedAccountRoot implements ISubscriptionContext {

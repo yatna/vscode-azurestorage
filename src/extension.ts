@@ -7,7 +7,7 @@
 
 import * as vscode from 'vscode';
 import { commands } from 'vscode';
-import { AzExtTreeDataProvider, AzExtTreeItem, AzureTreeItem, AzureUserInput, AzureWizard, callWithTelemetryAndErrorHandling, createApiProvider, createAzExtOutputChannel, createTelemetryReporter, IActionContext, registerCommand, registerUIExtensionVariables } from 'vscode-azureextensionui';
+import { AzExtTreeDataProvider, AzExtTreeItem, AzureTreeItem, AzureUserInput, AzureWizard, callWithTelemetryAndErrorHandling, createApiProvider, createAzExtOutputChannel, createTelemetryReporter, IActionContext, registerCommand, registerUIExtensionVariables, UserCancelledError } from 'vscode-azureextensionui';
 import { AzureExtensionApi, AzureExtensionApiProvider } from 'vscode-azureextensionui/api';
 import { AzureStorageFS } from './AzureStorageFS';
 import { revealTreeItem } from './commands/api/revealTreeItem';
@@ -134,16 +134,37 @@ export async function activateInternal(context: vscode.ExtensionContext, perfSta
     });
     registerCommand("azureStorage.uploadToAzureStorage", uploadToAzureStorage);
     registerCommand("azureStorage.attachStorageAccount", async () => {
-        await ext.attachedStorageAccountsTreeItem.attachNewAccount();
+        const attachTypePick = await vscode.window.showQuickPick(
+            [
+                { label: 'Attach Emulator', data: 'emulator' },
+                { label: 'Attach with Connection String...', data: 'connectionString' }
+            ],
+            { placeHolder: 'Select how to Attach...', ignoreFocusOut: true }
+        );
+
+        if (attachTypePick) {
+            if (attachTypePick.data === 'emulator') {
+                await ext.attachedStorageAccountsTreeItem.attachEmulator();
+            } else {
+                await ext.attachedStorageAccountsTreeItem.attachWithConnectionString();
+            }
+
+            await ext.tree.refresh(ext.attachedStorageAccountsTreeItem);
+        } else {
+            throw new UserCancelledError();
+        }
+    });
+    registerCommand('azureStorage.attachWithConnectionString', async () => {
+        await ext.attachedStorageAccountsTreeItem.attachWithConnectionString();
         await ext.tree.refresh(ext.attachedStorageAccountsTreeItem);
     });
     registerCommand('azureStorage.attachEmulator', async () => {
         await ext.attachedStorageAccountsTreeItem.attachEmulator();
         await ext.tree.refresh(ext.attachedStorageAccountsTreeItem);
     });
-    registerCommand('azureStorage.detachStorageAccount', async (actionContext: IActionContext, treeItem?: AzExtTreeItem) => {
+    registerCommand('azureStorage.detachStorageAccount', async (actionContext: IActionContext, treeItem?: StorageAccountTreeItem) => {
         if (!treeItem) {
-            treeItem = await ext.tree.showTreeItemPicker(StorageAccountTreeItem.contextValue += attachedAccountSuffix, actionContext);
+            treeItem = <StorageAccountTreeItem>await ext.tree.showTreeItemPicker(StorageAccountTreeItem.contextValue += attachedAccountSuffix, actionContext);
         }
 
         await ext.attachedStorageAccountsTreeItem.detach(treeItem);
