@@ -51,7 +51,9 @@ export class StorageAccountTreeItem extends AzureParentTreeItem<IStorageRoot> {
     private constructor(
         parent: AzureParentTreeItem,
         public readonly storageAccount: StorageAccountWrapper,
-        public readonly storageManagementClient: StorageManagementClient) {
+        public readonly storageManagementClient: StorageManagementClient,
+        public readonly isAttached?: boolean,
+        public readonly attachedAccountKey?: StorageAccountKey) {
         super(parent);
         this._root = this.createRoot(parent.root);
         this._blobContainerGroupTreeItem = new BlobContainerGroupTreeItem(this);
@@ -60,8 +62,8 @@ export class StorageAccountTreeItem extends AzureParentTreeItem<IStorageRoot> {
         this._tableGroupTreeItem = new TableGroupTreeItem(this);
     }
 
-    public static async createStorageAccountTreeItem(parent: AzureParentTreeItem, storageAccount: StorageAccountWrapper, client: StorageManagementClient): Promise<StorageAccountTreeItem> {
-        const ti = new StorageAccountTreeItem(parent, storageAccount, client);
+    public static async createStorageAccountTreeItem(parent: AzureParentTreeItem, storageAccount: StorageAccountWrapper, client: StorageManagementClient, isAttached?: boolean, attachedAccountKey?: StorageAccountKey): Promise<StorageAccountTreeItem> {
+        const ti = new StorageAccountTreeItem(parent, storageAccount, client, isAttached, attachedAccountKey);
         // make sure key is initialized
         await ti.refreshKey();
         return ti;
@@ -159,11 +161,15 @@ export class StorageAccountTreeItem extends AzureParentTreeItem<IStorageRoot> {
     }
 
     async getKeys(): Promise<StorageAccountKeyWrapper[]> {
-        let parsedId = this.parseAzureResourceId(this.storageAccount.id);
-        let resourceGroupName = parsedId.resourceGroups;
-        let keyResult = await this.storageManagementClient.storageAccounts.listKeys(resourceGroupName, this.storageAccount.name);
-        // tslint:disable-next-line:strict-boolean-expressions
-        return (keyResult.keys || <StorageAccountKey[]>[]).map(key => new StorageAccountKeyWrapper(key));
+        if (this.isAttached) {
+            return [new StorageAccountKeyWrapper(nonNullProp(this, 'attachedAccountKey'))];
+        } else {
+            let parsedId = this.parseAzureResourceId(this.storageAccount.id);
+            let resourceGroupName = parsedId.resourceGroups;
+            let keyResult = await this.storageManagementClient.storageAccounts.listKeys(resourceGroupName, this.storageAccount.name);
+            // tslint:disable-next-line:strict-boolean-expressions
+            return (keyResult.keys || <StorageAccountKey[]>[]).map(key => new StorageAccountKeyWrapper(key));
+        }
     }
 
     parseAzureResourceId(resourceId: string): { [key: string]: string } {

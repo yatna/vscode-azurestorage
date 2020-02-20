@@ -30,6 +30,7 @@ import { registerTableActionHandlers } from './commands/table/tableActionHandler
 import { registerTableGroupActionHandlers } from './commands/table/tableGroupActionHandlers';
 import { uploadToAzureStorage } from './commands/uploadToAzureStorage';
 import { ext } from './extensionVariables';
+import { attachedAccountSuffix } from './tree/AttachedStorageAccountsTreeItem';
 import { AzureAccountTreeItem } from './tree/AzureAccountTreeItem';
 import { BlobContainerTreeItem } from './tree/blob/BlobContainerTreeItem';
 import { FileShareTreeItem } from './tree/fileShare/FileShareTreeItem';
@@ -132,6 +133,22 @@ export async function activateInternal(context: vscode.ExtensionContext, perfSta
         });
     });
     registerCommand("azureStorage.uploadToAzureStorage", uploadToAzureStorage);
+    registerCommand("azureStorage.attachStorageAccount", async () => {
+        await ext.attachedStorageAccountsTreeItem.attachNewAccount();
+        await ext.tree.refresh(ext.attachedStorageAccountsTreeItem);
+    });
+    registerCommand('azureStorage.attachEmulator', async () => {
+        await ext.attachedStorageAccountsTreeItem.attachEmulator();
+        await ext.tree.refresh(ext.attachedStorageAccountsTreeItem);
+    });
+    registerCommand('azureStorage.detachStorageAccount', async (actionContext: IActionContext, treeItem?: AzExtTreeItem) => {
+        if (!treeItem) {
+            treeItem = await ext.tree.showTreeItemPicker(StorageAccountTreeItem.contextValue += attachedAccountSuffix, actionContext);
+        }
+
+        await ext.attachedStorageAccountsTreeItem.detach(treeItem);
+        await ext.tree.refresh(ext.attachedStorageAccountsTreeItem);
+    });
 
     return createApiProvider([<AzureExtensionApi>{
         revealTreeItem,
