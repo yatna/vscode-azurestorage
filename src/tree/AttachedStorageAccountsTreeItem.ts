@@ -3,8 +3,10 @@
  *  Licensed under the MIT License. See License.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as azureStorageBlob from '@azure/storage-blob';
 import StorageManagementClient from 'azure-arm-storage';
 import { StorageAccount, StorageAccountKey } from 'azure-arm-storage/lib/models';
+import * as azureStorage from 'azure-storage';
 import { ServiceClientCredentials } from 'ms-rest';
 import { AzureEnvironment } from 'ms-rest-azure';
 import * as path from 'path';
@@ -14,6 +16,7 @@ import { AzExtParentTreeItem, AzExtTreeItem, AzureParentTreeItem, GenericTreeIte
 import { getResourcesPath } from '../constants';
 import { ext } from '../extensionVariables';
 import { connectionStringPlaceholder, IParsedConnectionString, parseConnectionString } from '../utils/connectionStringUtils';
+import { localize } from '../utils/localize';
 import { StorageAccountWrapper } from '../utils/storageWrappers';
 import { StorageAccountTreeItem } from './StorageAccountTreeItem';
 
@@ -24,10 +27,10 @@ interface IPersistedAccount {
 }
 
 interface IPrimaryEndpoints {
-    blob: string;
-    table: string;
-    queue: string;
-    file?: string; // The emulator doesn't support file shares
+    blob?: string;
+    file?: string; // NOTE: The emulator doesn't support file shares
+    queue?: string;
+    table?: string;
 }
 
 export const attachedAccountSuffix: string = 'Attached';
@@ -46,8 +49,14 @@ export class AttachedStorageAccountsTreeItem extends AzureParentTreeItem {
     private readonly _emulatorBlobPort: number = 10000;
     private readonly _emulatorTablePort: number = 10002;
     private readonly _emulatorQueuePort: number = 10001;
-    private _emulatorAccountKey: string = 'Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==';
+    private readonly _emulatorAccountKey: string = 'Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==';
     private readonly _storageAccountType: string = 'Microsoft.Storage/storageAccounts';
+
+    // tslint:disable: no-http-string
+    private readonly _emulatorBlobEndpoint: string = `http://127.0.0.1:${this._emulatorBlobPort}/${this._emulatorAccountName}`;
+    private readonly _emulatorQueueEndpoint: string = `http://127.0.0.1:${this._emulatorQueuePort}/${this._emulatorAccountName}`;
+    private readonly _emulatorTableEndpoint: string = `http://127.0.0.1:${this._emulatorTablePort}/${this._emulatorAccountName}`;
+    // tslint:enable: no-http-string
 
     constructor(parent: AzExtParentTreeItem) {
         super(parent);
@@ -120,14 +129,16 @@ export class AttachedStorageAccountsTreeItem extends AzureParentTreeItem {
     }
 
     public async attachEmulator(): Promise<void> {
+        let endpoints: IPrimaryEndpoints = await this.getActiveEmulatorEndpointsWithProgress();
+
+        if (!endpoints.blob && !endpoints.queue && !endpoints.table) {
+            throw new Error(localize('azureStorageEmulatorIsNotRunning', 'The Azure Storage Emulator is not running. Start the emulator before attaching.'));
+        }
+
         await this.attachAccount(await this.createTreeItem(
             this._emulatorAccountName,
             this.getStorageAccountKey(this._emulatorAccountKey),
-            {
-                blob: this.getEmulatorEndpoint(this._emulatorBlobPort),
-                queue: this.getEmulatorEndpoint(this._emulatorQueuePort),
-                table: this.getEmulatorEndpoint(this._emulatorTablePort)
-            }
+            endpoints
         ));
     }
 
@@ -153,7 +164,7 @@ export class AttachedStorageAccountsTreeItem extends AzureParentTreeItem {
                 this._attachedAccounts = await this._loadPersistedAccountsTask;
             } catch {
                 this._attachedAccounts = [];
-                throw new Error('Failed to load persisted Storage Accounts. Accounts must be reattached manually.');
+                throw new Error(localize('failedToLoadPersistedStorageAccounts', 'Failed to load persisted Storage Accounts. Accounts must be reattached manually.'));
             }
         }
 
@@ -164,7 +175,7 @@ export class AttachedStorageAccountsTreeItem extends AzureParentTreeItem {
         const attachedAccounts: StorageAccountTreeItem[] = await this.getAttachedAccounts();
 
         if (attachedAccounts.find(s => s.id === treeItem.id)) {
-            vscode.window.showWarningMessage(`Storage Account '${treeItem.id}' is already attached.`);
+            vscode.window.showWarningMessage(localize('storageAccountIsAlreadyAttached', `Storage Account '${treeItem.id}' is already attached.`));
         } else {
             attachedAccounts.push(treeItem);
             await this.persistIds(attachedAccounts);
@@ -178,7 +189,13 @@ export class AttachedStorageAccountsTreeItem extends AzureParentTreeItem {
             // ext.context.globalState.update(this._serviceName, false);
             const accounts: IPersistedAccount[] = <IPersistedAccount[]>JSON.parse(value);
             await Promise.all(accounts.map(async account => {
-                persistedAccounts.push(await this.createTreeItem(account.name, account.key, account.primaryEndpoints));
+                let treeItem = await this.createTreeItem(account.name, account.key, account.primaryEndpoints);
+
+                if (account.name === this._emulatorAccountName && !(await this.isEmulatorActive())) {
+                    await this.detach(treeItem);
+                } else {
+                    persistedAccounts.push(treeItem);
+                }
             }));
         }
 
@@ -214,13 +231,85 @@ export class AttachedStorageAccountsTreeItem extends AzureParentTreeItem {
         await ext.context.globalState.update(this._serviceName, JSON.stringify(value));
     }
 
-    private getAttachedAccountEndpoint(parsedConnectionString: IParsedConnectionString, endpointType: string): string {
-        return `${parsedConnectionString.defaultEndpointsProtocol}://${parsedConnectionString.accountName}.${endpointType}.${parsedConnectionString.endpointSuffix}`;
+    private async getActiveEmulatorEndpoints(): Promise<IPrimaryEndpoints> {
+        let endpoints: IPrimaryEndpoints = {};
+
+        const credential = new azureStorageBlob.StorageSharedKeyCredential(this._emulatorAccountName, this._emulatorAccountKey);
+        const blobServiceClient = new azureStorageBlob.BlobServiceClient(this._emulatorBlobEndpoint, credential);
+
+        // Pinging services when the emulator isn't running hangs for a long time, so set a timeout
+        if (await this.taskResolvesBeforeTimeout(blobServiceClient.getProperties())) {
+            endpoints.blob = this._emulatorBlobEndpoint;
+        }
+
+        const queueService: azureStorage.QueueService = azureStorage.createQueueService(this._emulatorAccountName, this._emulatorAccountKey, this._emulatorQueueEndpoint).withFilter(new azureStorage.ExponentialRetryPolicyFilter());
+        let queueTask = new Promise((resolve, reject) => {
+            // tslint:disable-next-line:no-any
+            queueService.getServiceProperties((err: any) => {
+                if (err) {
+                    reject();
+                }
+                resolve();
+            });
+        });
+
+        if (await this.taskResolvesBeforeTimeout(queueTask)) {
+            endpoints.queue = this._emulatorQueueEndpoint;
+        }
+
+        // tslint:disable-next-line:no-any the typings for createTableService are incorrect
+        const tableService: azureStorage.TableService = azureStorage.createTableService(this._emulatorAccountName, this._emulatorAccountKey, <any>this._emulatorTableEndpoint).withFilter(new azureStorage.ExponentialRetryPolicyFilter());
+        let tableTask = new Promise((resolve, reject) => {
+            // tslint:disable-next-line:no-any
+            tableService.getServiceProperties((err: any) => {
+                if (err) {
+                    reject();
+                }
+                resolve();
+            });
+        });
+
+        if (await this.taskResolvesBeforeTimeout(tableTask)) {
+            endpoints.table = this._emulatorTableEndpoint;
+        }
+
+        return endpoints;
     }
 
-    private getEmulatorEndpoint(port: number): string {
-        // tslint:disable-next-line:no-http-string
-        return `http://127.0.0.1:${port}/${this._emulatorAccountName}`;
+    // tslint:disable-next-line:no-any
+    private async taskResolvesBeforeTimeout(promise: any): Promise<boolean> {
+        let timeout = new Promise((_resolve, reject) => {
+            let id = setTimeout(() => {
+                clearTimeout(id);
+                reject();
+                // tslint:disable-next-line:align
+            }, 1000);
+        });
+
+        try {
+            await Promise.race([
+                promise,
+                timeout
+            ]);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    private async getActiveEmulatorEndpointsWithProgress(): Promise<IPrimaryEndpoints> {
+        return await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: localize('ensuringEmulatorIsRunning', 'Ensuring Azure Storage Emulator is running...') }, async () => {
+            return await this.getActiveEmulatorEndpoints();
+        });
+    }
+
+    private async isEmulatorActive(): Promise<boolean> {
+        let endpoints: IPrimaryEndpoints = await this.getActiveEmulatorEndpoints();
+        return !!endpoints.blob || !!endpoints.queue || !!endpoints.table;
+    }
+
+    private getAttachedAccountEndpoint(parsedConnectionString: IParsedConnectionString, endpointType: string): string {
+        return `${parsedConnectionString.defaultEndpointsProtocol}://${parsedConnectionString.accountName}.${endpointType}.${parsedConnectionString.endpointSuffix}`;
     }
 
     private getAttachedAccountId(name: string): string {
@@ -233,7 +322,7 @@ export class AttachedStorageAccountsTreeItem extends AzureParentTreeItem {
 }
 
 class AttachedAccountRoot implements ISubscriptionContext {
-    private _error: Error = new Error('Cannot retrieve Azure subscription information for an attached account.');
+    private _error: Error = new Error(localize('cannotRetrieveAzureSubscriptionInformation', 'Cannot retrieve Azure subscription information for an attached account.'));
 
     public get credentials(): ServiceClientCredentials {
         throw this._error;
