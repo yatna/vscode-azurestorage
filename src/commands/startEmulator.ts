@@ -19,7 +19,10 @@ export async function startEmulator(context: IActionContext, emulatorType: Emula
         // Use the Azurite extension
         await vscode.commands.executeCommand(`azurite.start_${emulatorType}`);
     } else if (await azuriteInstalled()) {
-        // Use the Azurite CLI. This is a long running command, don't await it
+        // Use the Azurite CLI
+        ext.outputChannel.show();
+
+        // This is a long running command, don't await it
         // tslint:disable-next-line: no-floating-promises
         cpUtils.executeCommand(ext.outputChannel, undefined, `azurite-${emulatorType}`);
     } else {

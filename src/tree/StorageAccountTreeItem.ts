@@ -117,8 +117,9 @@ export class StorageAccountTreeItem extends AzureParentTreeItem<IStorageRoot> {
 
                 const tableService: azureStorage.TableService = this.root.createTableService();
                 const tableTask: Promise<void> = new Promise((resolve, reject) => {
+                    // Getting table service properties will succeed even when tables aren't supported, so attempt to list tables instead
                     // tslint:disable-next-line:no-any
-                    tableService.getServiceProperties({}, (err?: any) => {
+                    tableService.listTablesSegmented(<azureStorage.TableService.ListTablesContinuationToken><unknown>undefined, (err?: any) => {
                         err ? reject(err) : resolve();
                     });
                 });
