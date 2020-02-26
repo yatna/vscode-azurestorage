@@ -5,7 +5,6 @@
 
 import * as azureStorageBlob from "@azure/storage-blob";
 import * as azureStorageShare from "@azure/storage-file-share";
-import * as azureStorageQueue from "@azure/storage-queue";
 import * as azureStorage from "azure-storage";
 import { ISubscriptionContext } from "vscode-azureextensionui";
 import { StorageAccountWrapper } from "../utils/storageWrappers";
@@ -16,6 +15,5 @@ export interface IStorageRoot extends ISubscriptionContext {
     createFileService(): azureStorage.FileService;
     createShareServiceClient(): azureStorageShare.ShareServiceClient;
     createQueueService(): azureStorage.QueueService;
-    createQueueServiceClient(): azureStorageQueue.QueueServiceClient;
     createTableService(): azureStorage.TableService;
 }

@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as azureStorageBlob from '@azure/storage-blob';
 import { StorageAccount } from 'azure-arm-storage/lib/models';
 import { ServiceClientCredentials } from 'ms-rest';
 import { AzureEnvironment } from 'ms-rest-azure';
@@ -88,18 +89,17 @@ export class AttachedStorageAccountsTreeItem extends AzureParentTreeItem {
         const connectionString = await vscode.window.showInputBox({
             prompt: 'Enter the connection string for your storage account',
             ignoreFocusOut: true,
+            validateInput: (value: string): string | undefined => this.validateConnectionString(value)
         });
 
         if (connectionString) {
-            let accountName: string | undefined = this.getPropertyFromConnectionString(connectionString, 'AccountName');
-
-            if (!accountName) {
-                if (connectionString === 'UseDevelopmentStorage=true;') {
-                    accountName = this._emulatorAccountName;
-                } else {
-                    accountName = 'Account name not provided';
-                }
+            try {
+                azureStorageBlob.BlobServiceClient.fromConnectionString(connectionString);
+            } catch {
+                throw new Error(localize('couldNotAttachStorageAccountWithProvidedConnectionString', 'Could not attach storage account with provided connection string.'));
             }
+
+            let accountName: string = this.getPropertyFromConnectionString(connectionString, 'AccountName') || this._emulatorAccountName;
 
             await this.attachAccount(await this.createTreeItem(
                 connectionString,
@@ -125,8 +125,8 @@ export class AttachedStorageAccountsTreeItem extends AzureParentTreeItem {
             await Promise.all(existingAccounts.map(async account => {
                 if (treeItem.storageAccount.name !== account.name) {
                     updatedAccounts.push(<IPersistedAccount>{
-                        connectionString: treeItem.connectionString,
-                        name: treeItem.storageAccount.name,
+                        connectionString: account.connectionString,
+                        name: account.name,
                     });
                 }
             }));
@@ -210,6 +210,20 @@ export class AttachedStorageAccountsTreeItem extends AzureParentTreeItem {
         // tslint:disable-next-line: strict-boolean-expressions
         const match: RegExpMatchArray | undefined = connectionString.match(regexp) || undefined;
         return match && match[1];
+    }
+
+    private validateConnectionString(connectionString: string): string | undefined {
+        if (connectionString.includes('DefaultEndpointsProtocol') &&
+            connectionString.includes('AccountName') &&
+            connectionString.includes('AccountKey')) {
+            return undefined;
+        }
+
+        if (connectionString === 'UseDevelopmentStorage=true;') {
+            return undefined;
+        }
+
+        return 'Connection string must match format "DefaultEndpointsProtocol=...;AccountName=...;AccountKey=...;..." or "UseDevelopmentStorage=true;"';
     }
 }
 

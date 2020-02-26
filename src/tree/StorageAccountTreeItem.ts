@@ -5,7 +5,6 @@
 
 import * as azureStorageBlob from '@azure/storage-blob';
 import * as azureStorageShare from '@azure/storage-file-share';
-import * as azureStorageQueue from '@azure/storage-queue';
 import { StorageManagementClient } from 'azure-arm-storage';
 import { StorageAccountKey } from 'azure-arm-storage/lib/models';
 import * as azureStorage from "azure-storage";
@@ -83,30 +82,48 @@ export class StorageAccountTreeItem extends AzureParentTreeItem<IStorageRoot> {
 
         if (this.connectionString) {
             // This is an attached account
-            let blobClient = this.root.createBlobServiceClient();
-            let queueClient = this.root.createQueueServiceClient();
+            const blobClient: azureStorageBlob.BlobServiceClient = this.root.createBlobServiceClient();
+            const blobContainersActive: boolean = await this.taskResolvesBeforeTimeout(blobClient.getProperties());
+
+            const queueClient: azureStorage.QueueService = this.root.createQueueService();
+            const queueTask: Promise<void> = new Promise((resolve, reject) => {
+                // tslint:disable-next-line:no-any
+                queueClient.getServiceProperties({}, (err?: any) => {
+                    err ? reject(err) : resolve();
+                });
+            });
+            const queuesActive: boolean = await this.taskResolvesBeforeTimeout(queueTask);
 
             if (this.connectionString === 'UseDevelopmentStorage=true;') {
-                // Determine if the emulator is running
-                // Pinging services when the emulator isn't running hangs for a long time, so set a timeout
-                this._blobContainerGroupTreeItem.active = await this.taskResolvesBeforeTimeout(blobClient.getProperties());
+                // Emulated accounts always include blob containers and queues, regardless of whether they're active or not
+                this._blobContainerGroupTreeItem.active = blobContainersActive;
                 groupTreeItems.push(this._blobContainerGroupTreeItem);
 
-                this._queueGroupTreeItem.active = await this.taskResolvesBeforeTimeout(queueClient.getProperties());
+                this._queueGroupTreeItem.active = queuesActive;
                 groupTreeItems.push(this._queueGroupTreeItem);
             } else {
-                let shareClient = this.root.createShareServiceClient();
-
-                if (blobClient.url) {
+                if (blobContainersActive) {
                     groupTreeItems.push(this._blobContainerGroupTreeItem);
                 }
 
-                if (queueClient.url) {
+                if (queuesActive) {
                     groupTreeItems.push(this._queueGroupTreeItem);
                 }
 
-                if (shareClient.url) {
+                const shareClient: azureStorageShare.ShareServiceClient = this.root.createShareServiceClient();
+                if (await this.taskResolvesBeforeTimeout(shareClient.getProperties())) {
                     groupTreeItems.push(this._fileShareGroupTreeItem);
+                }
+
+                const tableService: azureStorage.TableService = this.root.createTableService();
+                const tableTask: Promise<void> = new Promise((resolve, reject) => {
+                    // tslint:disable-next-line:no-any
+                    tableService.getServiceProperties({}, (err?: any) => {
+                        err ? reject(err) : resolve();
+                    });
+                });
+                if (await this.taskResolvesBeforeTimeout(tableTask)) {
+                    groupTreeItems.push(this._tableGroupTreeItem);
                 }
             }
         } else {
@@ -195,14 +212,6 @@ export class StorageAccountTreeItem extends AzureParentTreeItem<IStorageRoot> {
                     return new azureStorage.QueueService(this.connectionString).withFilter(new azureStorage.ExponentialRetryPolicyFilter());
                 } else {
                     return azureStorage.createQueueService(this.storageAccount.name, this.key.value, this.storageAccount.primaryEndpoints.queue).withFilter(new azureStorage.ExponentialRetryPolicyFilter());
-                }
-            },
-            createQueueServiceClient: () => {
-                if (this.connectionString) {
-                    return azureStorageQueue.QueueServiceClient.fromConnectionString(this.connectionString);
-                } else {
-                    const credential = new azureStorageQueue.StorageSharedKeyCredential(this.storageAccount.name, this.key.value);
-                    return new azureStorageQueue.QueueServiceClient(nonNullProp(this.storageAccount.primaryEndpoints, 'queue'), credential);
                 }
             },
             createTableService: () => {
