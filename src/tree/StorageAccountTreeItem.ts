@@ -85,7 +85,6 @@ export class StorageAccountTreeItem extends AzureParentTreeItem<IStorageRoot> {
             // This is an attached account
             let blobClient = this.root.createBlobServiceClient();
             let queueClient = this.root.createQueueServiceClient();
-            let shareClient = this.root.createShareServiceClient();
 
             if (this.connectionString === 'UseDevelopmentStorage=true;') {
                 // Determine if the emulator is running
@@ -96,6 +95,8 @@ export class StorageAccountTreeItem extends AzureParentTreeItem<IStorageRoot> {
                 this._queueGroupTreeItem.active = await this.taskResolvesBeforeTimeout(queueClient.getProperties());
                 groupTreeItems.push(this._queueGroupTreeItem);
             } else {
+                let shareClient = this.root.createShareServiceClient();
+
                 if (blobClient.url) {
                     groupTreeItems.push(this._blobContainerGroupTreeItem);
                 }
