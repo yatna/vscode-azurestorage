@@ -13,12 +13,13 @@ import { Uri } from 'vscode';
 import { AzExtParentTreeItem, AzExtTreeItem, AzureParentTreeItem, GenericTreeItem, ISubscriptionContext } from "vscode-azureextensionui";
 import { getResourcesPath } from '../constants';
 import { ext } from '../extensionVariables';
+import { KeyTar, tryGetKeyTar } from '../utils/keytar';
 import { localize } from '../utils/localize';
 import { StorageAccountWrapper } from '../utils/storageWrappers';
 import { StorageAccountTreeItem } from './StorageAccountTreeItem';
 
 interface IPersistedAccount {
-    connectionString: string;
+    fullId: string;
     name: string;
 }
 
@@ -33,12 +34,14 @@ export class AttachedStorageAccountsTreeItem extends AzureParentTreeItem {
     private _root: ISubscriptionContext;
     private _attachedAccounts: StorageAccountTreeItem[] | undefined;
     private _loadPersistedAccountsTask: Promise<StorageAccountTreeItem[]>;
+    private _keytar: KeyTar | undefined;
     private readonly _serviceName: string = "ms-azuretools.vscode-azurestorage.connectionStrings";
     private readonly _storageAccountType: string = 'Microsoft.Storage/storageAccounts';
     private readonly _emulatorAccountName: string = 'devstoreaccount1';
 
     constructor(parent: AzExtParentTreeItem) {
         super(parent);
+        this._keytar = tryGetKeyTar();
         // tslint:disable-next-line: no-use-before-declare
         this._root = new AttachedAccountRoot();
         this._loadPersistedAccountsTask = this.loadPersistedAccounts();
@@ -116,23 +119,16 @@ export class AttachedStorageAccountsTreeItem extends AzureParentTreeItem {
     }
 
     public async detach(treeItem: StorageAccountTreeItem): Promise<void> {
-        let updatedAccounts: IPersistedAccount[] = [];
+        const attachedAccounts: StorageAccountTreeItem[] = await this.getAttachedAccounts();
 
-        const value: string | undefined = ext.context.globalState.get(this._serviceName);
-        if (value) {
-            const existingAccounts: IPersistedAccount[] = <IPersistedAccount[]>JSON.parse(value);
-
-            await Promise.all(existingAccounts.map(async account => {
-                if (treeItem.storageAccount.name !== account.name) {
-                    updatedAccounts.push(<IPersistedAccount>{
-                        connectionString: account.connectionString,
-                        name: account.name,
-                    });
-                }
-            }));
+        const index = attachedAccounts.findIndex((account) => account.fullId === treeItem.fullId);
+        if (index !== -1) {
+            attachedAccounts.splice(index, 1);
+            if (this._keytar) {
+                await this._keytar.deletePassword(this._serviceName, treeItem.fullId);
+                await this.persistIds(attachedAccounts);
+            }
         }
-
-        await ext.context.globalState.update(this._serviceName, JSON.stringify(updatedAccounts));
     }
 
     private async getAttachedAccounts(): Promise<StorageAccountTreeItem[]> {
@@ -151,21 +147,25 @@ export class AttachedStorageAccountsTreeItem extends AzureParentTreeItem {
     private async attachAccount(treeItem: StorageAccountTreeItem): Promise<void> {
         const attachedAccounts: StorageAccountTreeItem[] = await this.getAttachedAccounts();
 
-        if (attachedAccounts.find(s => s.id === treeItem.id)) {
+        if (attachedAccounts.find(s => s.fullId === treeItem.fullId)) {
             vscode.window.showWarningMessage(localize('storageAccountIsAlreadyAttached', `Storage Account '${treeItem.id}' is already attached.`));
         } else {
             attachedAccounts.push(treeItem);
-            await this.persistIds(attachedAccounts);
+            if (this._keytar) {
+                await this._keytar.setPassword(this._serviceName, treeItem.fullId, await treeItem.getConnectionString());
+                await this.persistIds(attachedAccounts);
+            }
         }
     }
 
     private async loadPersistedAccounts(): Promise<StorageAccountTreeItem[]> {
         const persistedAccounts: StorageAccountTreeItem[] = [];
         const value: string | undefined = ext.context.globalState.get(this._serviceName);
-        if (value) {
+        if (value && this._keytar) {
             const accounts: IPersistedAccount[] = <IPersistedAccount[]>JSON.parse(value);
             await Promise.all(accounts.map(async account => {
-                let treeItem = await this.createTreeItem(account.connectionString, account.name);
+                const connectionString: string = <string>(this._keytar && await this._keytar.getPassword(this._serviceName, account.fullId));
+                let treeItem = await this.createTreeItem(connectionString, account.name);
                 persistedAccounts.push(treeItem);
             }));
         }
@@ -194,7 +194,7 @@ export class AttachedStorageAccountsTreeItem extends AzureParentTreeItem {
     private async persistIds(attachedAccounts: StorageAccountTreeItem[]): Promise<void> {
         const value: IPersistedAccount[] = attachedAccounts.map((treeItem: StorageAccountTreeItem) => {
             return <IPersistedAccount>{
-                connectionString: treeItem.connectionString,
+                fullId: treeItem.fullId,
                 name: treeItem.storageAccount.name,
             };
         });
