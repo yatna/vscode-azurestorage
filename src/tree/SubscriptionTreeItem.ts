@@ -78,4 +78,8 @@ export class SubscriptionTreeItem extends SubscriptionTreeItemBase {
     public hasMoreChildrenImpl(): boolean {
         return false;
     }
+
+    public isAncestorOfImpl(contextValue: string): boolean {
+        return contextValue === StorageAccountTreeItem.contextValue;
+    }
 }
