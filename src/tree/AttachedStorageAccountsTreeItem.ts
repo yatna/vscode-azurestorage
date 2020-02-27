@@ -225,7 +225,7 @@ export class AttachedStorageAccountsTreeItem extends AzureParentTreeItem {
             return undefined;
         }
 
-        return 'Connection string must match format "DefaultEndpointsProtocol=...;AccountName=...;AccountKey=...;..." or "UseDevelopmentStorage=true;"';
+        return `Connection string must match format "DefaultEndpointsProtocol=...;AccountName=...;AccountKey=...;" or "${AttachedStorageAccountsTreeItem.emulatorConnectionString}"`;
     }
 }
 
