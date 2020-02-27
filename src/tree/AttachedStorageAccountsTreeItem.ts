@@ -103,18 +103,12 @@ export class AttachedStorageAccountsTreeItem extends AzureParentTreeItem {
 
             let accountName: string = this.getPropertyFromConnectionString(connectionString, 'AccountName') || this._emulatorAccountName;
 
-            await this.attachAccount(await this.createTreeItem(
-                connectionString,
-                accountName
-            ));
+            await this.attachAccount(await this.createTreeItem(connectionString, accountName));
         }
     }
 
     public async attachEmulator(): Promise<void> {
-        await this.attachAccount(await this.createTreeItem(
-            AttachedStorageAccountsTreeItem.emulatorConnectionString,
-            this._emulatorAccountName,
-        ));
+        await this.attachAccount(await this.createTreeItem(AttachedStorageAccountsTreeItem.emulatorConnectionString, this._emulatorAccountName));
     }
 
     public async detach(treeItem: StorageAccountTreeItem): Promise<void> {
@@ -176,8 +170,7 @@ export class AttachedStorageAccountsTreeItem extends AzureParentTreeItem {
                     connectionString = <string>(this._keytar && await this._keytar.getPassword(this._serviceName, account.fullId));
                 }
 
-                let treeItem: StorageAccountTreeItem = await this.createTreeItem(connectionString, account.name);
-                persistedAccounts.push(treeItem);
+                persistedAccounts.push(await this.createTreeItem(connectionString, account.name));
             }));
         }
 
@@ -197,8 +190,7 @@ export class AttachedStorageAccountsTreeItem extends AzureParentTreeItem {
                 table: ''
             }
         });
-        let treeItem: StorageAccountTreeItem = await StorageAccountTreeItem.createStorageAccountTreeItem(this, storageAccountWrapper, undefined, connectionString);
-        return treeItem;
+        return await StorageAccountTreeItem.createStorageAccountTreeItem(this, storageAccountWrapper, undefined, connectionString);
     }
 
     private async persistIds(attachedAccounts: StorageAccountTreeItem[]): Promise<void> {

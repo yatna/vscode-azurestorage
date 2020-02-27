@@ -796,6 +796,7 @@
 		"@types/node": "^7.10.6",
 		"@types/opn": "5.1.0",
 		"@types/winreg": "1.2.30",
+		"copy-webpack-plugin": "^4.5.4",
 		"gulp": "^4.0.0",
 		"mocha": "^5.2.0",
 		"mocha-junit-reporter": "^1.18.0",
