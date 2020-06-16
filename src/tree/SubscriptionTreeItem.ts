@@ -5,6 +5,7 @@
 
 import { StorageManagementClient } from 'azure-arm-storage';
 import { StorageAccount } from 'azure-arm-storage/lib/models';
+import { AzureEnvironment } from 'ms-rest-azure';
 import * as vscode from 'vscode';
 import { AzExtTreeItem, AzureTreeItem, AzureWizard, AzureWizardExecuteStep, AzureWizardPromptStep, createAzureClient, ICreateChildImplContext, IStorageAccountWizardContext, LocationListStep, ResourceGroupCreateStep, ResourceGroupListStep, StorageAccountKind, StorageAccountPerformance, StorageAccountReplication, SubscriptionTreeItemBase } from 'vscode-azureextensionui';
 import { ISelectStorageAccountContext } from '../commands/selectStorageAccountNodeForCommand';
@@ -24,7 +25,59 @@ export class SubscriptionTreeItem extends SubscriptionTreeItemBase {
     public supportsAdvancedCreation: boolean = true;
 
     async loadMoreChildrenImpl(_clearCache: boolean): Promise<AzExtTreeItem[]> {
+        let base_url = "https://management.local.azurestack.external/";
+
+        var metadata = {
+            galleryEndpoint: "https://providers.azurestack.local:30016/",
+            graphEndpoint: "https://graph.windows.net/",
+            portalEndpoint: "https://portal.local.azurestack.external/",
+            authentication: {
+                loginEndpoint: "https://login.microsoftonline.com/",
+                audiences: [
+                    "https://management.azurestackci10.onmicrosoft.com/a90fb83c-6be8-4672-8472-06406c21600e"
+                ]
+            }
+        };
+        //Issue 1: rest_azure_1.AzureEnvironment is not a constructor
+        // var envarg: AzureEnvironmentParameters = {
+        //     name: "AzureStack",
+        //     portalUrl: 'https://portal.azure.com',
+        //     publishingProfileUrl: 'https://go.microsoft.com/fwlink/?LinkId=254432',
+        //     managementEndpointUrl: 'https://management.core.windows.net',
+        //     resourceManagerEndpointUrl: base_url,
+        //     sqlManagementEndpointUrl: 'https://management.core.windows.net:8443/',
+        //     sqlServerHostnameSuffix: '.database.windows.net',
+        //     galleryEndpointUrl: 'https://gallery.azure.com/',
+        //     activeDirectoryEndpointUrl: 'https://login.microsoftonline.com/',
+        //     activeDirectoryResourceId: 'https://management.core.windows.net/',
+        //     activeDirectoryGraphResourceId: 'https://graph.windows.net/',
+        //     batchResourceId: 'https://batch.core.windows.net/',
+        //     activeDirectoryGraphApiVersion: '2013-04-05',
+        //     storageEndpointSuffix: '.core.windows.net',
+        //     keyVaultDnsSuffix: '.vault.azure.net',
+        //     azureDataLakeStoreFileSystemEndpointSuffix: 'azuredatalakestore.net',
+        //     azureDataLakeAnalyticsCatalogAndJobEndpointSuffix: 'azuredatalakeanalytics.net',
+        //     validateAuthority: true
+        // };
+        // let new_env = new AzureEnvironment(envarg);
+
+        var env: AzureEnvironment = this.root.credentials.environment;
+        env.name = "AzureStack";
+        env.portalUrl = metadata.portalEndpoint;
+        env.resourceManagerEndpointUrl = base_url;
+        env.galleryEndpointUrl = metadata.galleryEndpoint;
+        env.activeDirectoryEndpointUrl = metadata.authentication.loginEndpoint.slice(0, metadata.authentication.loginEndpoint.lastIndexOf("/") + 1);
+        env.activeDirectoryResourceId = metadata.authentication.audiences[0];
+        env.activeDirectoryGraphResourceId = metadata.graphEndpoint;
+        env.storageEndpointSuffix = base_url.substring(base_url.indexOf('.'));
+        env.keyVaultDnsSuffix = ".vault" + base_url.substring(base_url.indexOf('.'));
+        env.managementEndpointUrl = metadata.authentication.audiences[0];
+
+        this.root.environment = env;
+
+        //Issue 2: clientType is not a constructor
         let storageManagementClient = createAzureClient(this.root, StorageManagementClient);
+        console.log(storageManagementClient);
         let accounts = await storageManagementClient.storageAccounts.list();
         return this.createTreeItemsWithErrorHandling(
             accounts,
