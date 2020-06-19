@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { StorageManagementClient } from 'azure-arm-storage';
+// import { StorageManagementClient } from 'azure-arm-storage';
 import { StorageAccount } from 'azure-arm-storage/lib/models';
 import { AzureEnvironment } from 'ms-rest-azure';
 import * as vscode from 'vscode';
@@ -19,6 +19,7 @@ import { StorageAccountCreateStep } from './createWizard/storageAccountCreateSte
 import { StorageAccountNameStep } from './createWizard/storageAccountNameStep';
 import { IStorageAccountTreeItemCreateContext, StorageAccountTreeItemCreateStep } from './createWizard/StorageAccountTreeItemCreateStep';
 import { StorageAccountTreeItem } from './StorageAccountTreeItem';
+var StorageManagementClient = require("@azure/arm-storage-profile-2019-03-01-hybrid").StorageManagementClient;
 
 export class SubscriptionTreeItem extends SubscriptionTreeItemBase {
     public childTypeLabel: string = "Storage Account";
@@ -74,6 +75,7 @@ export class SubscriptionTreeItem extends SubscriptionTreeItemBase {
         env.managementEndpointUrl = metadata.authentication.audiences[0];
 
         this.root.environment = env;
+        this.root.environment.resourceManagerEndpointUrl = { "baseUri": base_url };
 
         //Issue 2: clientType is not a constructor
         let storageManagementClient = createAzureClient(this.root, StorageManagementClient);
