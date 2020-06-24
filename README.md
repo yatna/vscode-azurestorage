@@ -1,5 +1,18 @@
 # Azure Storage for Visual Studio Code (Preview)
 
+## Instruction for linking local vscode-azureextentionui module to storage extention code
+
+1. `git clone` https://github.com/rakku-ms/vscode-azuretools.git
+2. `cd vscode-azuretools/ui`
+3. `git checkout user/rakku/azurestack`
+4. `npm install`
+5. `npm run build` (you shoudn't recieve any error here)
+6. `npm link` (You should see the link being created in console. Something like C:\Users\t-yaverm\AppData\Roaming\npm\node_modules\vscode-azureextensionui -> C:\Users\t-yaverm\Desktop\duplicate\vscode-azuretools\ui)
+7. `cd vscode-azurestorage`
+8. `npm install`
+9. `npm run build`
+10. `npm link vscode-azureextensionui` (you should be able to see the modified definition of createAzureClient in node_modules\vscode-azureextensionui\out\src\createAzureClient.js)
+
 [![Version](https://vsmarketplacebadge.apphb.com/version/ms-azuretools.vscode-azurestorage.svg)](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-azurestorage) [![Installs](https://vsmarketplacebadge.apphb.com/installs-short/ms-azuretools.vscode-azurestorage.svg)](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-azurestorage) [![Build Status](https://dev.azure.com/ms-azuretools/AzCode/_apis/build/status/vscode-azurestorage)](https://dev.azure.com/ms-azuretools/AzCode/_build/latest?definitionId=6)
 
 Azure Storage is a Microsoft-managed service providing cloud storage that is highly available, secure, durable, scalable, and redundant. Use the extension to deploy static websites and Single Page Apps (SPAs) and browse Azure Blob Containers, File Shares, Tables, and Queues.
