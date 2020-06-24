@@ -5,7 +5,6 @@
 
 // import { StorageManagementClient } from 'azure-arm-storage';
 import { StorageAccount } from 'azure-arm-storage/lib/models';
-import { AzureEnvironment } from 'ms-rest-azure';
 import * as vscode from 'vscode';
 import { AzExtTreeItem, AzureTreeItem, AzureWizard, AzureWizardExecuteStep, AzureWizardPromptStep, createAzureClient, ICreateChildImplContext, IStorageAccountWizardContext, LocationListStep, ResourceGroupCreateStep, ResourceGroupListStep, StorageAccountKind, StorageAccountPerformance, StorageAccountReplication, SubscriptionTreeItemBase } from 'vscode-azureextensionui';
 import { ISelectStorageAccountContext } from '../commands/selectStorageAccountNodeForCommand';
@@ -20,6 +19,7 @@ import { StorageAccountNameStep } from './createWizard/storageAccountNameStep';
 import { IStorageAccountTreeItemCreateContext, StorageAccountTreeItemCreateStep } from './createWizard/StorageAccountTreeItemCreateStep';
 import { StorageAccountTreeItem } from './StorageAccountTreeItem';
 var StorageManagementClient = require("@azure/arm-storage-profile-2019-03-01-hybrid").StorageManagementClient;
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 export class SubscriptionTreeItem extends SubscriptionTreeItemBase {
     public childTypeLabel: string = "Storage Account";
@@ -62,7 +62,7 @@ export class SubscriptionTreeItem extends SubscriptionTreeItemBase {
         // };
         // let new_env = new AzureEnvironment(envarg);
 
-        var env: AzureEnvironment = this.root.credentials.environment;
+        var env = this.root.credentials.environment;
         env.name = "AzureStack";
         env.portalUrl = metadata.portalEndpoint;
         env.resourceManagerEndpointUrl = base_url;
