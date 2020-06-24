@@ -4,7 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 // import { StorageManagementClient } from 'azure-arm-storage';
-import { StorageAccount } from 'azure-arm-storage/lib/models';
+import { StorageManagementClient } from '@azure/arm-storage-profile-2019-03-01-hybrid';
+import { StorageAccount } from '@azure/arm-storage-profile-2019-03-01-hybrid/esm/models';
 import * as vscode from 'vscode';
 import { AzExtTreeItem, AzureTreeItem, AzureWizard, AzureWizardExecuteStep, AzureWizardPromptStep, createAzureClient, ICreateChildImplContext, IStorageAccountWizardContext, LocationListStep, ResourceGroupCreateStep, ResourceGroupListStep, StorageAccountKind, StorageAccountPerformance, StorageAccountReplication, SubscriptionTreeItemBase } from 'vscode-azureextensionui';
 import { ISelectStorageAccountContext } from '../commands/selectStorageAccountNodeForCommand';
@@ -18,51 +19,26 @@ import { StorageAccountCreateStep } from './createWizard/storageAccountCreateSte
 import { StorageAccountNameStep } from './createWizard/storageAccountNameStep';
 import { IStorageAccountTreeItemCreateContext, StorageAccountTreeItemCreateStep } from './createWizard/StorageAccountTreeItemCreateStep';
 import { StorageAccountTreeItem } from './StorageAccountTreeItem';
-var StorageManagementClient = require("@azure/arm-storage-profile-2019-03-01-hybrid").StorageManagementClient;
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 export class SubscriptionTreeItem extends SubscriptionTreeItemBase {
     public childTypeLabel: string = "Storage Account";
     public supportsAdvancedCreation: boolean = true;
 
     async loadMoreChildrenImpl(_clearCache: boolean): Promise<AzExtTreeItem[]> {
-        let base_url = "https://management.local.azurestack.external/";
 
+        let base_url = "https://management.azure.com/";
         var metadata = {
-            galleryEndpoint: "https://providers.azurestack.local:30016/",
+            galleryEndpoint: "https://gallery.azure.com/",
             graphEndpoint: "https://graph.windows.net/",
-            portalEndpoint: "https://portal.local.azurestack.external/",
+            portalEndpoint: "https://portal.azure.com/",
             authentication: {
-                loginEndpoint: "https://login.microsoftonline.com/",
+                loginEndpoint: "https://login.windows.net/",
                 audiences: [
-                    "https://management.azurestackci10.onmicrosoft.com/a90fb83c-6be8-4672-8472-06406c21600e"
+                    "https://management.core.windows.net/"
                 ]
             }
         };
-        //Issue 1: rest_azure_1.AzureEnvironment is not a constructor
-        // var envarg: AzureEnvironmentParameters = {
-        //     name: "AzureStack",
-        //     portalUrl: 'https://portal.azure.com',
-        //     publishingProfileUrl: 'https://go.microsoft.com/fwlink/?LinkId=254432',
-        //     managementEndpointUrl: 'https://management.core.windows.net',
-        //     resourceManagerEndpointUrl: base_url,
-        //     sqlManagementEndpointUrl: 'https://management.core.windows.net:8443/',
-        //     sqlServerHostnameSuffix: '.database.windows.net',
-        //     galleryEndpointUrl: 'https://gallery.azure.com/',
-        //     activeDirectoryEndpointUrl: 'https://login.microsoftonline.com/',
-        //     activeDirectoryResourceId: 'https://management.core.windows.net/',
-        //     activeDirectoryGraphResourceId: 'https://graph.windows.net/',
-        //     batchResourceId: 'https://batch.core.windows.net/',
-        //     activeDirectoryGraphApiVersion: '2013-04-05',
-        //     storageEndpointSuffix: '.core.windows.net',
-        //     keyVaultDnsSuffix: '.vault.azure.net',
-        //     azureDataLakeStoreFileSystemEndpointSuffix: 'azuredatalakestore.net',
-        //     azureDataLakeAnalyticsCatalogAndJobEndpointSuffix: 'azuredatalakeanalytics.net',
-        //     validateAuthority: true
-        // };
-        // let new_env = new AzureEnvironment(envarg);
-
-        var env = this.root.credentials.environment;
+        var env = this.root.environment;
         env.name = "AzureStack";
         env.portalUrl = metadata.portalEndpoint;
         env.resourceManagerEndpointUrl = base_url;
@@ -73,9 +49,7 @@ export class SubscriptionTreeItem extends SubscriptionTreeItemBase {
         env.storageEndpointSuffix = base_url.substring(base_url.indexOf('.'));
         env.keyVaultDnsSuffix = ".vault" + base_url.substring(base_url.indexOf('.'));
         env.managementEndpointUrl = metadata.authentication.audiences[0];
-
         this.root.environment = env;
-        this.root.environment.resourceManagerEndpointUrl = { "baseUri": base_url };
 
         //Issue 2: clientType is not a constructor
         let storageManagementClient = createAzureClient(this.root, StorageManagementClient);
