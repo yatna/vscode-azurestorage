@@ -16,6 +16,7 @@ import { commands, MessageItem, Uri, window } from 'vscode';
 import { AzureParentTreeItem, AzureTreeItem, AzureWizard, createAzureClient, DialogResponses, IActionContext, ISubscriptionContext, UserCancelledError } from 'vscode-azureextensionui';
 import { getResourcesPath, staticWebsiteContainerName } from '../constants';
 import { ext } from "../extensionVariables";
+import { getStorageManagementClient, ifStack } from '../utils/environmentUtils';
 import { localize } from '../utils/localize';
 import { nonNullProp } from '../utils/nonNull';
 import { StorageAccountKeyWrapper, StorageAccountWrapper } from '../utils/storageWrappers';
@@ -128,7 +129,13 @@ export class StorageAccountTreeItem extends AzureParentTreeItem<IStorageRoot> {
         const result = await ext.ui.showWarningMessage(message, { modal: true }, DialogResponses.deleteResponse, DialogResponses.cancel);
         if (result === DialogResponses.deleteResponse) {
             const deletingStorageAccount: string = localize('deletingStorageAccount', 'Deleting storage account "{0}"...', this.label);
-            let storageManagementClient = createAzureClient(this.root, StorageManagementClient);
+            let storageManagementClient: StorageManagementClient;
+            if (ifStack()) {
+                // tslint:disable-next-line: no-unsafe-any
+                storageManagementClient = createAzureClient(this.root, getStorageManagementClient());
+            } else {
+                storageManagementClient = createAzureClient(this.root, StorageManagementClient);
+            }
             let parsedId = this.parseAzureResourceId(this.storageAccount.id);
             let resourceGroupName = parsedId.resourceGroups;
 

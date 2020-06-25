@@ -8,6 +8,7 @@ import { StorageAccount } from 'azure-arm-storage/lib/models';
 import * as vscode from 'vscode';
 import { AzExtTreeItem, AzureTreeItem, AzureWizard, AzureWizardExecuteStep, AzureWizardPromptStep, createAzureClient, ICreateChildImplContext, IStorageAccountWizardContext, LocationListStep, ResourceGroupCreateStep, ResourceGroupListStep, StorageAccountKind, StorageAccountPerformance, StorageAccountReplication, SubscriptionTreeItemBase } from 'vscode-azureextensionui';
 import { ISelectStorageAccountContext } from '../commands/selectStorageAccountNodeForCommand';
+import { getEnvironment, getStorageManagementClient, ifStack } from '../utils/environmentUtils';
 import { nonNull, StorageAccountWrapper } from '../utils/storageWrappers';
 import { AttachedStorageAccountTreeItem } from './AttachedStorageAccountTreeItem';
 import { StaticWebsiteConfigureStep } from './createWizard/StaticWebsiteConfigureStep';
@@ -24,7 +25,15 @@ export class SubscriptionTreeItem extends SubscriptionTreeItemBase {
     public supportsAdvancedCreation: boolean = true;
 
     async loadMoreChildrenImpl(_clearCache: boolean): Promise<AzExtTreeItem[]> {
-        let storageManagementClient = createAzureClient(this.root, StorageManagementClient);
+        let isAzureStack: boolean = ifStack();
+        let storageManagementClient: StorageManagementClient;
+        if (isAzureStack) {
+            await getEnvironment(this.root);
+            // tslint:disable-next-line: no-unsafe-any
+            storageManagementClient = createAzureClient(this.root, getStorageManagementClient());
+        } else {
+            storageManagementClient = createAzureClient(this.root, StorageManagementClient);
+        }
         let accounts = await storageManagementClient.storageAccounts.list();
         return this.createTreeItemsWithErrorHandling(
             accounts,
