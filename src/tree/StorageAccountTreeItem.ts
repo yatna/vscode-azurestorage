@@ -5,11 +5,8 @@
 
 import * as azureStorageBlob from '@azure/storage-blob';
 import * as azureStorageShare from '@azure/storage-file-share';
-import { StorageManagementClient } from 'azure-arm-storage';
 import { StorageAccountKey } from 'azure-arm-storage/lib/models';
 import * as azureStorage from "azure-storage";
-// tslint:disable-next-line:no-require-imports
-import opn = require('opn');
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { commands, MessageItem, Uri, window } from 'vscode';
@@ -29,6 +26,9 @@ import { FileShareGroupTreeItem } from './fileShare/FileShareGroupTreeItem';
 import { IStorageRoot } from './IStorageRoot';
 import { QueueGroupTreeItem } from './queue/QueueGroupTreeItem';
 import { TableGroupTreeItem } from './table/TableGroupTreeItem';
+import StorageManagementClient = require('azure-arm-storage');
+// tslint:disable-next-line:no-require-imports
+import opn = require('opn');
 
 export type WebsiteHostingStatus = {
     capable: boolean;

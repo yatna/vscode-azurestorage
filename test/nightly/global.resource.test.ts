@@ -4,11 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ResourceManagementClient } from 'azure-arm-resource';
-import StorageManagementClient from 'azure-arm-storage';
 import * as vscode from 'vscode';
 import { TestAzureAccount } from 'vscode-azureextensiondev';
 import { AzExtTreeDataProvider, AzureAccountTreeItem, createAzureClient, ext } from '../../extension.bundle';
 import { longRunningTestsEnabled } from '../global.test';
+import StorageManagementClient = require('azure-arm-storage');
 
 export let testAccount: TestAzureAccount;
 export let webSiteClient: StorageManagementClient;

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.md in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { StorageManagementClient } from 'azure-arm-storage';
+import StorageManagementClient = require('azure-arm-storage');
 import { StorageAccount } from 'azure-arm-storage/lib/models';
 import * as vscode from 'vscode';
 import { AzExtTreeItem, AzureTreeItem, AzureWizard, AzureWizardExecuteStep, AzureWizardPromptStep, createAzureClient, ICreateChildImplContext, IStorageAccountWizardContext, LocationListStep, ResourceGroupCreateStep, ResourceGroupListStep, StorageAccountKind, StorageAccountPerformance, StorageAccountReplication, SubscriptionTreeItemBase } from 'vscode-azureextensionui';
@@ -24,6 +24,32 @@ export class SubscriptionTreeItem extends SubscriptionTreeItemBase {
     public supportsAdvancedCreation: boolean = true;
 
     async loadMoreChildrenImpl(_clearCache: boolean): Promise<AzExtTreeItem[]> {
+
+        let base_url = "https://management.azure.com/";
+        var metadata = {
+            galleryEndpoint: "https://gallery.azure.com/",
+            graphEndpoint: "https://graph.windows.net/",
+            portalEndpoint: "https://portal.azure.com/",
+            authentication: {
+                loginEndpoint: "https://login.windows.net/",
+                audiences: [
+                    "https://management.core.windows.net/"
+                ]
+            }
+        };
+        var env = this.root.environment;
+        env.name = "AzureStack";
+        env.portalUrl = metadata.portalEndpoint;
+        env.resourceManagerEndpointUrl = base_url;
+        env.galleryEndpointUrl = metadata.galleryEndpoint;
+        env.activeDirectoryEndpointUrl = metadata.authentication.loginEndpoint.slice(0, metadata.authentication.loginEndpoint.lastIndexOf("/") + 1);
+        env.activeDirectoryResourceId = metadata.authentication.audiences[0];
+        env.activeDirectoryGraphResourceId = metadata.graphEndpoint;
+        env.storageEndpointSuffix = base_url.substring(base_url.indexOf('.'));
+        env.keyVaultDnsSuffix = ".vault" + base_url.substring(base_url.indexOf('.'));
+        env.managementEndpointUrl = metadata.authentication.audiences[0];
+        this.root.environment = env;
+
         let storageManagementClient = createAzureClient(this.root, StorageManagementClient);
         let accounts = await storageManagementClient.storageAccounts.list();
         return this.createTreeItemsWithErrorHandling(

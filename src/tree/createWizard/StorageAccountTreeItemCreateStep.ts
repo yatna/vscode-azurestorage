@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import StorageManagementClient from "azure-arm-storage";
+import StorageManagementClient = require('azure-arm-storage');
 import { StorageAccount } from "azure-arm-storage/lib/models";
 import { AzureWizardExecuteStep, createAzureClient, IStorageAccountWizardContext } from "vscode-azureextensionui";
 import { nonNull, StorageAccountWrapper } from "../../utils/storageWrappers";
