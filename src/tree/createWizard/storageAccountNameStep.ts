@@ -7,13 +7,17 @@ import { StorageManagementClient } from 'azure-arm-storage';
 import { CheckNameAvailabilityResult } from 'azure-arm-storage/lib/models';
 import { AzureNameStep, createAzureClient, IStorageAccountWizardContext, ResourceGroupListStep, resourceGroupNamingRules, storageAccountNamingRules } from 'vscode-azureextensionui';
 import { ext } from '../../extensionVariables';
-import { getStorageManagementClient, ifStack } from '../../utils/environmentUtils';
+import { ifStack } from '../../utils/environmentUtils';
+
+// tslint:disable-next-line: no-require-imports
+import StorageManagementClient3 = require('azure-arm-storage3');
+
 export class StorageAccountNameStep<T extends IStorageAccountWizardContext> extends AzureNameStep<T> {
     public async prompt(wizardContext: T): Promise<void> {
-        let client: StorageManagementClient;
+        let client;
         if (ifStack()) {
             // tslint:disable-next-line: no-unsafe-any
-            client = createAzureClient(wizardContext, getStorageManagementClient());
+            client = createAzureClient(wizardContext, StorageManagementClient3);
         } else {
             client = createAzureClient(wizardContext, StorageManagementClient);
         }
@@ -22,6 +26,7 @@ export class StorageAccountNameStep<T extends IStorageAccountWizardContext> exte
         wizardContext.newStorageAccountName = (await ext.ui.showInputBox({
             value: suggestedName,
             prompt: 'Enter a globally unique name for the new Storage Account',
+            // tslint:disable-next-line: no-unsafe-any
             validateInput: async (value: string): Promise<string | undefined> => await this.validateStorageAccountName(client, value)
         })).trim();
 

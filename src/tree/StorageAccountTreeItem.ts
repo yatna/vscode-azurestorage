@@ -8,15 +8,13 @@ import * as azureStorageShare from '@azure/storage-file-share';
 import { StorageManagementClient } from 'azure-arm-storage';
 import { StorageAccountKey } from 'azure-arm-storage/lib/models';
 import * as azureStorage from "azure-storage";
-// tslint:disable-next-line:no-require-imports
-import opn = require('opn');
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { commands, MessageItem, Uri, window } from 'vscode';
 import { AzureParentTreeItem, AzureTreeItem, AzureWizard, createAzureClient, DialogResponses, IActionContext, ISubscriptionContext, UserCancelledError } from 'vscode-azureextensionui';
 import { getResourcesPath, staticWebsiteContainerName } from '../constants';
 import { ext } from "../extensionVariables";
-import { getStorageManagementClient, ifStack } from '../utils/environmentUtils';
+import { ifStack } from '../utils/environmentUtils';
 import { localize } from '../utils/localize';
 import { nonNullProp } from '../utils/nonNull';
 import { StorageAccountKeyWrapper, StorageAccountWrapper } from '../utils/storageWrappers';
@@ -30,6 +28,12 @@ import { FileShareGroupTreeItem } from './fileShare/FileShareGroupTreeItem';
 import { IStorageRoot } from './IStorageRoot';
 import { QueueGroupTreeItem } from './queue/QueueGroupTreeItem';
 import { TableGroupTreeItem } from './table/TableGroupTreeItem';
+
+// tslint:disable-next-line:no-require-imports
+import opn = require('opn');
+
+// tslint:disable-next-line: no-require-imports
+import StorageManagementClient3 = require('azure-arm-storage3');
 
 export type WebsiteHostingStatus = {
     capable: boolean;
@@ -129,10 +133,9 @@ export class StorageAccountTreeItem extends AzureParentTreeItem<IStorageRoot> {
         const result = await ext.ui.showWarningMessage(message, { modal: true }, DialogResponses.deleteResponse, DialogResponses.cancel);
         if (result === DialogResponses.deleteResponse) {
             const deletingStorageAccount: string = localize('deletingStorageAccount', 'Deleting storage account "{0}"...', this.label);
-            let storageManagementClient: StorageManagementClient;
+            let storageManagementClient;
             if (ifStack()) {
-                // tslint:disable-next-line: no-unsafe-any
-                storageManagementClient = createAzureClient(this.root, getStorageManagementClient());
+                storageManagementClient = createAzureClient(this.root, StorageManagementClient3);
             } else {
                 storageManagementClient = createAzureClient(this.root, StorageManagementClient);
             }
@@ -141,6 +144,7 @@ export class StorageAccountTreeItem extends AzureParentTreeItem<IStorageRoot> {
 
             ext.outputChannel.appendLog(deletingStorageAccount);
             await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: deletingStorageAccount }, async () => {
+                // tslint:disable-next-line: no-unsafe-any
                 await storageManagementClient.storageAccounts.deleteMethod(resourceGroupName, this.storageAccount.name);
             });
 

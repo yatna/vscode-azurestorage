@@ -7,7 +7,10 @@ import { StorageManagementClient } from 'azure-arm-storage';
 import { Progress } from 'vscode';
 import { AzureWizardExecuteStep, createAzureClient, INewStorageAccountDefaults, IStorageAccountWizardContext } from 'vscode-azureextensionui';
 import { ext } from '../../extensionVariables';
-import { getStorageManagementClient, ifStack } from '../../utils/environmentUtils';
+import { ifStack } from '../../utils/environmentUtils';
+
+// tslint:disable-next-line: no-require-imports
+import StorageManagementClient3 = require('azure-arm-storage3');
 
 export class StorageAccountCreateStep<T extends IStorageAccountWizardContext> extends AzureWizardExecuteStep<T> implements StorageAccountCreateStep<T> {
     public priority: number = 130;
@@ -28,13 +31,13 @@ export class StorageAccountCreateStep<T extends IStorageAccountWizardContext> ex
         const creatingStorageAccount: string = `Creating storage account "${newName}" in location "${newLocation}" with sku "${newSkuName}"...`;
         ext.outputChannel.appendLog(creatingStorageAccount);
         progress.report({ message: creatingStorageAccount });
-        let storageClient: StorageManagementClient;
+        let storageClient;
         if (ifStack()) {
-            // tslint:disable-next-line: no-unsafe-any
-            storageClient = createAzureClient(wizardContext, getStorageManagementClient());
+            storageClient = createAzureClient(wizardContext, StorageManagementClient3);
         } else {
             storageClient = createAzureClient(wizardContext, StorageManagementClient);
         }
+        // tslint:disable-next-line: no-unsafe-any
         wizardContext.storageAccount = await storageClient.storageAccounts.create(
             // tslint:disable-next-line:no-non-null-assertion
             wizardContext.resourceGroup!.name!,

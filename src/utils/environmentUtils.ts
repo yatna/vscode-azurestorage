@@ -2,8 +2,6 @@ import { AzureEnvironment } from 'ms-rest-azure';
 import * as path from 'path';
 import * as request from 'request';
 
-// tslint:disable-next-line: no-var-requires no-require-imports
-let storageManagementClient = require('azure-arm-storage3');
 let environmentType: string = "unknown";
 let baseUrl = "";
 
@@ -88,8 +86,4 @@ export async function getEnvironment(root): Promise<void> {
         // tslint:disable-next-line: no-unsafe-any
         root.environment = env;
     }
-}
-
-export function getStorageManagementClient(): typeof storageManagementClient {
-    return storageManagementClient;
 }

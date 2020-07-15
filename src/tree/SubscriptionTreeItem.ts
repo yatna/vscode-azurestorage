@@ -8,7 +8,7 @@ import { StorageAccount } from 'azure-arm-storage/lib/models';
 import * as vscode from 'vscode';
 import { AzExtTreeItem, AzureTreeItem, AzureWizard, AzureWizardExecuteStep, AzureWizardPromptStep, createAzureClient, ICreateChildImplContext, IStorageAccountWizardContext, LocationListStep, ResourceGroupCreateStep, ResourceGroupListStep, StorageAccountKind, StorageAccountPerformance, StorageAccountReplication, SubscriptionTreeItemBase } from 'vscode-azureextensionui';
 import { ISelectStorageAccountContext } from '../commands/selectStorageAccountNodeForCommand';
-import { getEnvironment, getStorageManagementClient, ifStack } from '../utils/environmentUtils';
+import { getEnvironment, ifStack } from '../utils/environmentUtils';
 import { nonNull, StorageAccountWrapper } from '../utils/storageWrappers';
 import { AttachedStorageAccountTreeItem } from './AttachedStorageAccountTreeItem';
 import { StaticWebsiteConfigureStep } from './createWizard/StaticWebsiteConfigureStep';
@@ -20,24 +20,29 @@ import { StorageAccountNameStep } from './createWizard/storageAccountNameStep';
 import { IStorageAccountTreeItemCreateContext, StorageAccountTreeItemCreateStep } from './createWizard/StorageAccountTreeItemCreateStep';
 import { StorageAccountTreeItem } from './StorageAccountTreeItem';
 
+// tslint:disable-next-line: no-require-imports
+import StorageManagementClient3 = require('azure-arm-storage3');
+
 export class SubscriptionTreeItem extends SubscriptionTreeItemBase {
     public childTypeLabel: string = "Storage Account";
     public supportsAdvancedCreation: boolean = true;
 
     async loadMoreChildrenImpl(_clearCache: boolean): Promise<AzExtTreeItem[]> {
         let isAzureStack: boolean = ifStack();
-        let storageManagementClient: StorageManagementClient;
+        let storageManagementClient;
         if (isAzureStack) {
             await getEnvironment(this.root);
-            // tslint:disable-next-line: no-unsafe-any
-            storageManagementClient = createAzureClient(this.root, getStorageManagementClient());
+            storageManagementClient = createAzureClient(this.root, StorageManagementClient3);
         } else {
             storageManagementClient = createAzureClient(this.root, StorageManagementClient);
         }
+        // tslint:disable-next-line: no-unsafe-any
         let accounts = await storageManagementClient.storageAccounts.list();
         return this.createTreeItemsWithErrorHandling(
+            // tslint:disable-next-line: no-unsafe-any
             accounts,
             'invalidStorageAccount',
+            // tslint:disable-next-line: no-unsafe-any
             async (sa: StorageAccount) => await StorageAccountTreeItem.createStorageAccountTreeItem(this, new StorageAccountWrapper(sa), storageManagementClient),
             (sa: StorageAccount) => {
                 return sa.name;
